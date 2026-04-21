@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Search, Bot, Sparkles, Trash2, Edit3, X, RotateCcw, Recycle, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -7,6 +7,13 @@ import { useAuthStore } from '@/stores/authStore'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { AgentTemplate, Agent } from '@/types'
+
+const TEMPLATE_GROUPS: { label: string; icon: string; ids: string[] }[] = [
+  { label: '技术研发', icon: '💻', ids: ['tpl-2', 'tpl-8'] },
+  { label: '产品设计', icon: '🎨', ids: ['tpl-3', 'tpl-4', 'tpl-5'] },
+  { label: '管理决策', icon: '👔', ids: ['tpl-6', 'tpl-1'] },
+  { label: '专业服务', icon: '⚖️', ids: ['tpl-7'] },
+]
 
 function CompactTemplateCard({ template, onUse, onHide, onClick }: {
   template: AgentTemplate; onUse: () => void; onHide: () => void; onClick: () => void
@@ -196,6 +203,25 @@ export default function AgentListPage() {
   const filteredTemplates = visibleTemplates.filter((t) =>
     !search || t.name.includes(search) || t.tags.some((tag) => tag.includes(search))
   )
+  const groupedTemplates = useMemo(() => {
+    const filteredIds = new Set(filteredTemplates.map((t) => t.id))
+    const tplMap = new Map(filteredTemplates.map((t) => [t.id, t]))
+    const grouped: { label: string; icon: string; templates: AgentTemplate[] }[] = []
+    const usedIds = new Set<string>()
+
+    for (const group of TEMPLATE_GROUPS) {
+      const items = group.ids.filter((id) => filteredIds.has(id)).map((id) => tplMap.get(id)!)
+      if (items.length > 0) {
+        grouped.push({ label: group.label, icon: group.icon, templates: items })
+        items.forEach((t) => usedIds.add(t.id))
+      }
+    }
+    const ungrouped = filteredTemplates.filter((t) => !usedIds.has(t.id))
+    if (ungrouped.length > 0) {
+      grouped.push({ label: '其他', icon: '🤖', templates: ungrouped })
+    }
+    return grouped
+  }, [filteredTemplates])
   const filteredAgents = agents.filter((a) =>
     !search || a.name.includes(search) || a.expertise.some((e) => e.includes(search))
   )
@@ -304,18 +330,29 @@ export default function AgentListPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto pb-2 -mx-1 px-1">
-              <div className="flex gap-4">
-                {filteredTemplates.map((template) => (
-                  <CompactTemplateCard
-                    key={template.id}
-                    template={template}
-                    onUse={() => handleUseTemplate(template)}
-                    onHide={() => handleHideTemplate(template)}
-                    onClick={() => setDetailTemplate(template)}
-                  />
-                ))}
-              </div>
+            <div className="space-y-6">
+              {groupedTemplates.map((group) => (
+                <div key={group.label}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-base">{group.icon}</span>
+                    <h3 className="text-sm font-semibold text-gray-700">{group.label}</h3>
+                    <span className="text-xs text-gray-400">{group.templates.length} 个角色</span>
+                  </div>
+                  <div className="overflow-x-auto pb-2 -mx-1 px-1">
+                    <div className="flex gap-4">
+                      {group.templates.map((template) => (
+                        <CompactTemplateCard
+                          key={template.id}
+                          template={template}
+                          onUse={() => handleUseTemplate(template)}
+                          onHide={() => handleHideTemplate(template)}
+                          onClick={() => setDetailTemplate(template)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
