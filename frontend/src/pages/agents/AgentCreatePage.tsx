@@ -1,0 +1,406 @@
+import { useState, useRef, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Send, Sparkles, Check, Dices } from 'lucide-react'
+import { AGENT_COLORS, useAgentStore } from '@/stores/agentStore'
+import { useAuthStore } from '@/stores/authStore'
+import { chatCompletion, LLMError } from '@/services/llmService'
+import { isModelConfigValid } from '@/stores/settingsStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { toast } from '@/components/ui/Toast'
+import type { Agent, AgentColor } from '@/types'
+
+const ALL_COLORS: AgentColor[] = ['indigo', 'violet', 'pink', 'orange', 'teal', 'sky', 'slate', 'green']
+
+interface ChatMsg {
+  role: 'ai' | 'user'
+  content: string
+}
+
+const GUIDED_CREATION_PROMPT = `你是 DocMind 的 Agent 创建助手。你的目标是通过**分步引导**帮用户创建一个文档评审角色。
+
+## 对话流程（严格按顺序进行）
+
+### 第1步：确认行业/领域
+你需要先问用户这个角色属于什么行业或领域。给出 4-5 个选项让用户选择或自定义。
+比如：技术/产品/设计/教育/法律/金融/管理... 等。
+
+### 第2步：确认性格特点
+用户回答后，询问性格偏好。给出选项：
+A. 严格认真型 — 标准高，直言不讳
+B. 温和友善型 — 善于鼓励，同理心强  
+C. 直接犀利型 — 一针见血，不留情面
+D. 幽默风趣型 — 轻松活泼，喜欢用比喻
+让用户选一个或描述自定义性格。
+
+### 第3步：确认关注重点
+问用户希望这个角色在评审文档时重点关注什么。给出参考：
+- 逻辑论证 / 数据准确 / 用户体验 / 可行性 / 文字表达 / 创新性 / 合规风险
+
+### 第4步：生成角色
+收集完以上信息后，告诉用户"正在为你生成角色..."，然后输出 JSON。
+
+## JSON 输出格式（仅在第4步输出）
+请严格按以下格式输出（仅输出 JSON，不要其他内容）：
+\`\`\`json
+{
+  "name": "角色名称（2-4个字，有个性）",
+  "avatar": "一个代表此角色的 emoji",
+  "tagline": "一句话角色标签（XX领域·XX风格）",
+  "color": "从 indigo/violet/pink/orange/teal/sky/slate/green 中选一个",
+  "personality": {
+    "directness": 3,
+    "strictness": 4,
+    "humor": 2,
+    "empathy": 3
+  },
+  "expertise": ["专长1", "专长2", "专长3", "专长4"],
+  "behavior": {
+    "style": "说话风格描述",
+    "catchphrase": "口头禅（有性格特色）"
+  },
+  "system_prompt": "完整的系统提示词"
+}
+\`\`\`
+
+## 重要规则
+- 每次只问一个问题，不要一次把所有问题都抛出
+- 用轻松友好的语气，像和朋友聊天
+- 给出的选项要用 A/B/C/D 标记，方便用户选择
+- 如果用户说"随机"或"帮我选"，你就随机组合一个
+- 在第4步之前，不要输出任何 JSON`
+
+const RANDOM_AGENT_PROMPT = `你是 DocMind 的 Agent 创建助手。请随机生成一个有趣且有个性的文档评审角色。
+
+随机组合行业、性格、说话风格，生成一个独特的角色。要有创意，不要太平庸。
+
+请严格按以下 JSON 格式输出（仅输出 JSON，不要其他内容）：
+{
+  "name": "角色名称（2-4个字，有个性）",
+  "avatar": "一个代表此角色的 emoji",
+  "tagline": "一句话角色标签",
+  "color": "从 indigo/violet/pink/orange/teal/sky/slate/green 中随机选一个",
+  "personality": {
+    "directness": 随机1-5,
+    "strictness": 随机1-5,
+    "humor": 随机1-5,
+    "empathy": 随机1-5
+  },
+  "expertise": ["专长1", "专长2", "专长3"],
+  "behavior": {
+    "style": "说话风格描述",
+    "catchphrase": "有个性的口头禅"
+  },
+  "system_prompt": "完整的系统提示词，要包含角色性格和说话方式"
+}`
+
+const INITIAL_MESSAGES: ChatMsg[] = [
+  {
+    role: 'ai',
+    content: '你好！让我们一起创建一个评审角色吧 🎭\n\n首先，这个角色属于什么行业或领域？\n\nA. 💻 技术 / 开发\nB. 📋 产品 / 运营\nC. 🎨 设计 / 用户体验\nD. 📚 教育 / 学术\nE. ⚖️ 法律 / 合规\nF. 📊 数据 / 分析\nG. 👔 管理 / 战略\n\n输入字母选择，或直接告诉我你想要的领域！',
+  },
+]
+
+function parseAgentJSON(text: string) {
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) return null
+    const parsed = JSON.parse(jsonMatch[0])
+    if (!parsed.name || !parsed.personality) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+export default function AgentCreatePage() {
+  const navigate = useNavigate()
+  const { user } = useAuthStore()
+  const addAgent = useAgentStore((s) => s.addAgent)
+  const config = useSettingsStore((s) => s.currentConfig)
+  const hasValidConfig = isModelConfigValid(config)
+
+  const [messages, setMessages] = useState<ChatMsg[]>(INITIAL_MESSAGES)
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [preview, setPreview] = useState<{
+    name: string; avatar: string; tagline: string; color: AgentColor
+    personality: { directness: number; strictness: number; humor: number; empathy: number }
+    expertise: string[]; behavior: { style: string; catchphrase: string }; system_prompt: string
+  } | null>(null)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
+
+  const processLLMResponse = (text: string) => {
+    const parsed = parseAgentJSON(text)
+    if (parsed) {
+      const validColor = ALL_COLORS.includes(parsed.color) ? parsed.color : ALL_COLORS[Math.floor(Math.random() * ALL_COLORS.length)]
+      const previewData = {
+        name: parsed.name,
+        avatar: parsed.avatar || '🤖',
+        tagline: parsed.tagline || '',
+        color: validColor as AgentColor,
+        personality: {
+          directness: Math.min(5, Math.max(1, parsed.personality?.directness || 3)),
+          strictness: Math.min(5, Math.max(1, parsed.personality?.strictness || 3)),
+          humor: Math.min(5, Math.max(1, parsed.personality?.humor || 3)),
+          empathy: Math.min(5, Math.max(1, parsed.personality?.empathy || 3)),
+        },
+        expertise: parsed.expertise || [],
+        behavior: { style: parsed.behavior?.style || '', catchphrase: parsed.behavior?.catchphrase || '' },
+        system_prompt: parsed.system_prompt || '',
+      }
+      setPreview(previewData)
+      setMessages((prev) => [...prev, {
+        role: 'ai',
+        content: `✅ 角色「${previewData.name}」已生成！\n\n请在右侧预览卡片中查看详情。如果满意，点击"保存角色"即可。\n\n不满意？继续告诉我哪里需要调整。`,
+      }])
+    } else {
+      setMessages((prev) => [...prev, { role: 'ai', content: text || '生成失败，请重新描述。' }])
+    }
+  }
+
+  const handleSend = async () => {
+    if (!input.trim() || loading) return
+    const userMsg = input.trim()
+    setInput('')
+    setMessages((prev) => [...prev, { role: 'user', content: userMsg }])
+    setLoading(true)
+
+    if (!hasValidConfig) {
+      setMessages((prev) => [...prev, {
+        role: 'ai',
+        content: '你还没有配置 API Key，请先到「设置」页面配置模型和 API Key。\n\n配置完成后回来继续创建角色。',
+      }])
+      setLoading(false)
+      return
+    }
+
+    const conversationMsgs = messages
+      .concat([{ role: 'user', content: userMsg }])
+      .map((m) => ({
+        role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: m.content,
+      }))
+
+    try {
+      await chatCompletion(
+        [{ role: 'system', content: GUIDED_CREATION_PROMPT }, ...conversationMsgs],
+        {
+          onChunk: () => {},
+          onDone: (text) => processLLMResponse(text),
+          onError: (err) => {
+            setMessages((prev) => [...prev, { role: 'ai', content: `出错了：${err.message}` }])
+          },
+        }
+      )
+    } catch (err) {
+      const message = err instanceof LLMError ? err.message : '请求失败，请检查网络连接'
+      setMessages((prev) => [...prev, { role: 'ai', content: message }])
+    }
+    setLoading(false)
+  }
+
+  const handleRandomGenerate = async () => {
+    if (loading) return
+    if (!hasValidConfig) {
+      toast('info', '请先到设置页面配置 API Key')
+      return
+    }
+    setMessages((prev) => [...prev, { role: 'user', content: '🎲 随机生成一个角色！' }])
+    setLoading(true)
+
+    try {
+      await chatCompletion(
+        [{ role: 'system', content: RANDOM_AGENT_PROMPT }, { role: 'user', content: '请随机生成一个独特有趣的评审角色' }],
+        {
+          onChunk: () => {},
+          onDone: (text) => processLLMResponse(text),
+          onError: (err) => {
+            setMessages((prev) => [...prev, { role: 'ai', content: `出错了：${err.message}` }])
+          },
+        }
+      )
+    } catch (err) {
+      const message = err instanceof LLMError ? err.message : '请求失败，请检查网络连接'
+      setMessages((prev) => [...prev, { role: 'ai', content: message }])
+    }
+    setLoading(false)
+  }
+
+  const handleSave = () => {
+    if (!preview) return
+    const agent: Agent = {
+      id: crypto.randomUUID(),
+      owner_id: user?.id || '',
+      name: preview.name,
+      avatar: preview.avatar,
+      tagline: preview.tagline,
+      personality: preview.personality,
+      expertise: preview.expertise,
+      behavior: preview.behavior,
+      system_prompt: preview.system_prompt,
+      source: 'custom',
+      is_public: false,
+      usage_count: 0,
+      color: preview.color,
+      created_at: new Date().toISOString(),
+    }
+    addAgent(agent)
+    toast('success', `角色「${preview.name}」已保存！`)
+    navigate('/agents')
+  }
+
+  return (
+    <div className="space-y-6 animate-slide-up">
+      <Link to="/agents" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
+        <ArrowLeft className="h-4 w-4" /> 返回 Agent 工坊
+      </Link>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">创建新的评审角色</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {hasValidConfig
+              ? '通过对话引导创建你的专属评审角色'
+              : '请先到设置页面配置 API Key，然后回来创建角色'}
+          </p>
+        </div>
+        <button
+          onClick={handleRandomGenerate}
+          disabled={loading || !hasValidConfig}
+          className="flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-100 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          title="随机抽一个角色"
+        >
+          <Dices className="h-4 w-4" />
+          随机生成
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <div className="lg:col-span-3 rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col" style={{ height: '600px' }}>
+          <div className="border-b border-gray-100 px-5 py-3">
+            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4 text-primary-500" /> 引导式创建
+            </h3>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-[80%] rounded-xl px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
+                    msg.role === 'user' ? 'bg-primary-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-700 rounded-tl-sm'
+                  }`}
+                >
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="flex gap-1 rounded-xl bg-gray-100 px-4 py-3">
+                  <span className="h-2 w-2 rounded-full bg-gray-400 animate-pulse-dot" />
+                  <span className="h-2 w-2 rounded-full bg-gray-400 animate-pulse-dot" style={{ animationDelay: '0.2s' }} />
+                  <span className="h-2 w-2 rounded-full bg-gray-400 animate-pulse-dot" style={{ animationDelay: '0.4s' }} />
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          <div className="border-t border-gray-100 p-4">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                placeholder="输入你的选择或描述..."
+                className="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+              />
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || loading}
+                className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer border-0 transition-colors"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-2 space-y-4">
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h3 className="text-base font-semibold text-gray-900 mb-4">角色预览</h3>
+
+            {preview ? (
+              <div>
+                <div
+                  className="rounded-xl border-l-[3px] border border-gray-100 p-4 mb-4"
+                  style={{ borderLeftColor: AGENT_COLORS[preview.color] }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div
+                      className="flex h-12 w-12 items-center justify-center rounded-full text-2xl"
+                      style={{ backgroundColor: AGENT_COLORS[preview.color] + '15', boxShadow: `0 0 0 2px ${AGENT_COLORS[preview.color]}` }}
+                    >
+                      {preview.avatar}
+                    </div>
+                    <div>
+                      <h4 className="text-base font-semibold text-gray-900">{preview.name}</h4>
+                      <p className="text-xs text-gray-500">{preview.tagline}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 mb-3">
+                    {Object.entries(preview.personality).map(([key, val]) => {
+                      const labels: Record<string, string> = { directness: '直接度', strictness: '严格度', humor: '幽默感', empathy: '共情力' }
+                      return (
+                        <div key={key} className="flex items-center gap-2 text-xs">
+                          <span className="w-12 text-gray-500">{labels[key]}</span>
+                          <div className="flex-1 h-1.5 rounded-full bg-gray-100">
+                            <div className="h-full rounded-full" style={{ width: `${val * 20}%`, backgroundColor: AGENT_COLORS[preview.color] }} />
+                          </div>
+                          <span className="text-gray-400 w-5 text-right">{val}/5</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {preview.expertise.map((e) => (
+                      <span key={e} className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: AGENT_COLORS[preview.color] + '15', color: AGENT_COLORS[preview.color] }}>
+                        {e}
+                      </span>
+                    ))}
+                  </div>
+                  {preview.behavior.catchphrase && (
+                    <p className="text-xs text-gray-400 italic">"{preview.behavior.catchphrase}"</p>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSave}
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-primary-600 py-2 text-sm font-medium text-white hover:bg-primary-700 cursor-pointer border-0"
+                  >
+                    <Check className="h-4 w-4" /> 保存角色
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="py-8 text-center">
+                <Sparkles className="mx-auto h-10 w-10 text-gray-300 mb-3" />
+                <p className="text-sm text-gray-500">完成对话引导后，角色预览会在这里显示</p>
+                <p className="text-xs text-gray-400 mt-1">也可以点击"随机生成"快速抽一个</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

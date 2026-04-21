@@ -1,0 +1,20 @@
+{
+  "windows": [
+    {
+      "id": "win_default",
+      "title": "默认对话",
+      "session_id": "b8b09f97-5f8d-4a19-8283-863f5b55f05d",
+      "created_at": "2026-04-20T21:36:17.937713",
+      "updated_at": "2026-04-21T03:21:37.763457+00:00",
+      "message_count": 33,
+      "last_message_preview": "/dev-planning-doc 对产品需求进行任务拆分和里程碑规划，放在当前项目的 docs/ ",
+      "state": "suspended",
+      "last_runner_pid": 27064,
+      "last_active_at": "2026-04-21T03:21:37.762452+00:00",
+      "suspend_reason": "manual deactivate",
+      "last_error": "",
+      "is_active": false
+    }
+  ],
+  "active_window_id": "win_default"
+}

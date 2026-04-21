@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocMind — 工作台</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', "PingFang SC", "Microsoft YaHei", sans-serif; color: #111827; background: #F5F3FF; min-height: 100vh; display: flex; }
+    a { text-decoration: none; color: inherit; }
+    button { cursor: pointer; font-family: inherit; }
+
+    /* ===== Sidebar ===== */
+    .sidebar { width: 240px; background: #FFFFFF; border-right: 1px solid #E5E7EB; display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; left: 0; z-index: 50; }
+    .sidebar-logo { padding: 20px; display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; color: #4F46E5; border-bottom: 1px solid #F3F4F6; }
+    .sidebar-logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #6366F1, #4F46E5); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 15px; }
+    .sidebar-nav { padding: 12px; flex: 1; }
+    .nav-section-title { font-size: 11px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 12px; margin-top: 8px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; font-size: 14px; font-weight: 500; color: #374151; transition: all 0.15s; margin-bottom: 2px; cursor: pointer; }
+    .nav-item:hover { background: #F3F4F6; color: #111827; }
+    .nav-item.active { background: #EEF2FF; color: #4F46E5; font-weight: 600; }
+    .nav-item-icon { font-size: 16px; width: 20px; text-align: center; }
+    .nav-item-badge { margin-left: auto; background: #4F46E5; color: white; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px; }
+    .sidebar-footer { padding: 16px; border-top: 1px solid #F3F4F6; }
+    .user-info { display: flex; align-items: center; gap: 10px; }
+    .user-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #6366F1, #8B5CF6); display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; font-weight: 600; }
+    .user-name { font-size: 13px; font-weight: 600; }
+    .user-email { font-size: 11px; color: #9CA3AF; }
+
+    /* ===== Main ===== */
+    .main { margin-left: 240px; flex: 1; min-height: 100vh; }
+
+    /* ===== Top Bar ===== */
+    .topbar { height: 56px; background: white; border-bottom: 1px solid #E5E7EB; display: flex; align-items: center; justify-content: space-between; padding: 0 32px; position: sticky; top: 0; z-index: 40; }
+    .topbar-title { font-size: 18px; font-weight: 600; }
+    .topbar-actions { display: flex; gap: 10px; align-items: center; }
+    .btn-sm { padding: 7px 14px; font-size: 13px; font-weight: 500; border-radius: 8px; border: none; transition: all 0.15s; }
+    .btn-sm-primary { background: #4F46E5; color: white; }
+    .btn-sm-primary:hover { background: #4338CA; }
+    .btn-sm-ghost { background: white; color: #374151; border: 1px solid #D1D5DB; }
+    .btn-sm-ghost:hover { background: #F9FAFB; }
+    .search-box { padding: 7px 14px 7px 34px; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 13px; width: 220px; background: #F9FAFB url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%239CA3AF' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.656a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E") 10px center no-repeat; }
+
+    /* ===== Content Area ===== */
+    .content { padding: 32px; }
+    .tab-bar { display: flex; gap: 0; border-bottom: 2px solid #E5E7EB; margin-bottom: 28px; }
+    .tab { padding: 10px 20px; font-size: 14px; font-weight: 500; color: #6B7280; border-bottom: 2px solid transparent; margin-bottom: -2px; cursor: pointer; transition: all 0.15s; }
+    .tab:hover { color: #374151; }
+    .tab.active { color: #4F46E5; font-weight: 600; border-bottom-color: #4F46E5; }
+
+    /* ===== Document Grid ===== */
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .section-header h2 { font-size: 22px; font-weight: 600; }
+    .doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+
+    /* ===== Document Card ===== */
+    .doc-card { background: white; border-radius: 12px; border: 1px solid #E5E7EB; padding: 20px; transition: all 0.2s; cursor: pointer; }
+    .doc-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.06); border-color: #C7D2FE; }
+    .doc-card-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+    .doc-type-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .doc-type-pdf { background: #FEF2F2; }
+    .doc-type-docx { background: #EFF6FF; }
+    .doc-type-md { background: #F0FDF4; }
+    .doc-title { font-size: 15px; font-weight: 600; line-height: 1.4; }
+    .doc-meta { font-size: 12px; color: #9CA3AF; margin-top: 2px; }
+    .doc-tags { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+    .doc-tag { padding: 3px 8px; background: #F3F4F6; border-radius: 6px; font-size: 11px; color: #6B7280; }
+    .doc-footer { display: flex; align-items: center; justify-content: space-between; }
+    .doc-status { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .status-ready { background: #10B981; }
+    .status-parsing { background: #F59E0B; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .doc-time { font-size: 12px; color: #9CA3AF; }
+    .doc-actions { display: flex; gap: 6px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #F3F4F6; }
+    .doc-btn { flex: 1; padding: 7px 0; font-size: 12px; font-weight: 500; border: 1px solid #E5E7EB; border-radius: 6px; background: white; color: #374151; text-align: center; transition: all 0.15s; }
+    .doc-btn:hover { background: #F9FAFB; border-color: #D1D5DB; }
+    .doc-btn-primary { background: #4F46E5; color: white; border-color: #4F46E5; }
+    .doc-btn-primary:hover { background: #4338CA; }
+
+    /* ===== Agent Cards ===== */
+    .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .agent-card { background: white; border-radius: 12px; border: 1px solid #E5E7EB; padding: 16px; border-left: 3px solid; transition: all 0.2s; cursor: pointer; }
+    .agent-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
+    .agent-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .agent-avatar { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; border: 2px solid; }
+    .agent-name { font-size: 14px; font-weight: 600; }
+    .agent-tagline { font-size: 12px; color: #6B7280; }
+    .agent-desc { font-size: 13px; color: #6B7280; line-height: 1.5; margin-bottom: 10px; }
+    .agent-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+    .agent-tag { padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 500; }
+    .agent-usage { font-size: 11px; color: #9CA3AF; margin-top: 10px; }
+    .agent-card-actions { display: flex; gap: 6px; margin-top: 10px; }
+
+    /* ===== Review Panel ===== */
+    .review-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
+    .review-card { background: white; border-radius: 12px; border: 1px solid #E5E7EB; overflow: hidden; transition: all 0.2s; }
+    .review-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
+    .review-header { padding: 16px 20px; border-bottom: 1px solid #F3F4F6; display: flex; align-items: center; justify-content: space-between; }
+    .review-doc-title { font-size: 14px; font-weight: 600; }
+    .review-score { display: flex; align-items: center; gap: 6px; }
+    .review-score-num { font-size: 20px; font-weight: 700; color: #4F46E5; }
+    .review-score-star { color: #F59E0B; font-size: 14px; }
+    .review-agents { padding: 12px 20px; display: flex; gap: 8px; border-bottom: 1px solid #F3F4F6; }
+    .review-agent-chip { display: flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 500; }
+    .review-body { padding: 16px 20px; }
+    .review-section-title { font-size: 12px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .consensus-item { padding: 6px 10px; background: #ECFDF5; border-radius: 6px; font-size: 12px; color: #065F46; margin-bottom: 4px; display: flex; align-items: flex-start; gap: 6px; }
+    .controversy-item { padding: 6px 10px; background: #FFFBEB; border-radius: 6px; font-size: 12px; color: #92400E; margin-bottom: 4px; }
+    .suggestion-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12px; }
+    .suggestion-priority { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+    .priority-high { background: #FEF2F2; color: #EF4444; }
+    .priority-medium { background: #FFFBEB; color: #F59E0B; }
+    .priority-low { background: #F0FDF4; color: #22C55E; }
+    .review-footer { padding: 12px 20px; border-top: 1px solid #F3F4F6; display: flex; gap: 8px; }
+
+    /* ===== Upload Zone ===== */
+    .upload-zone { border: 2px dashed #D1D5DB; border-radius: 16px; padding: 60px 40px; text-align: center; background: #FAFAFA; transition: all 0.2s; cursor: pointer; margin-bottom: 32px; }
+    .upload-zone:hover { border-color: #6366F1; background: #EEF2FF; }
+    .upload-icon { font-size: 40px; margin-bottom: 12px; }
+    .upload-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+    .upload-hint { font-size: 13px; color: #6B7280; }
+
+    /* ===== Quick Stats ===== */
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+    .stat-card { background: white; border-radius: 12px; border: 1px solid #E5E7EB; padding: 20px; }
+    .stat-label { font-size: 12px; color: #6B7280; margin-bottom: 4px; }
+    .stat-value { font-size: 28px; font-weight: 700; }
+    .stat-change { font-size: 12px; margin-top: 4px; }
+    .stat-up { color: #10B981; }
+    .stat-neutral { color: #6B7280; }
+
+    /* ===== Page Sections (hidden by default) ===== */
+    .page-section { display: none; }
+    .page-section.active { display: block; }
+
+    /* ===== Toast ===== */
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #111827; color: white; padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 500; display: none; z-index: 200; box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+    .toast.show { display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s ease-out; }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">D</div>
+      DocMind
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-title">概览</div>
+      <div class="nav-item active" onclick="switchPage('dashboard')">
+        <span class="nav-item-icon">🏠</span> 工作台
+      </div>
+
+      <div class="nav-section-title">核心功能</div>
+      <div class="nav-item" onclick="switchPage('documents')">
+        <span class="nav-item-icon">📄</span> 文档中心
+        <span class="nav-item-badge">7</span>
+      </div>
+      <div class="nav-item" onclick="switchPage('agents')">
+        <span class="nav-item-icon">🎭</span> Agent 工坊
+      </div>
+      <div class="nav-item" onclick="switchPage('reviews')">
+        <span class="nav-item-icon">🏛️</span> 评审大厅
+        <span class="nav-item-badge">3</span>
+      </div>
+      <div class="nav-item" onclick="switchPage('chat')">
+        <span class="nav-item-icon">💬</span> 聊天室
+      </div>
+
+      <div class="nav-section-title">设置</div>
+      <div class="nav-item">
+        <span class="nav-item-icon">⚙️</span> 个人设置
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">张</div>
+        <div>
+          <div class="user-name">张明</div>
+          <div class="user-email">zhang@example.com</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <div class="main">
+
+    <!-- ========== Dashboard Page ========== -->
+    <div id="page-dashboard" class="page-section active">
+      <div class="topbar">
+        <div class="topbar-title">🏠 工作台</div>
+        <div class="topbar-actions">
+          <input class="search-box" placeholder="搜索文档、Agent...">
+          <button class="btn-sm btn-sm-primary" onclick="showToast('📄 上传功能演示中...')">+ 上传文档</button>
+        </div>
+      </div>
+      <div class="content">
+        <!-- Stats -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">我的文档</div>
+            <div class="stat-value">7</div>
+            <div class="stat-change stat-up">↑ 2 本周新增</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">我的 Agent</div>
+            <div class="stat-value">5</div>
+            <div class="stat-change stat-neutral">— 无变化</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">评审次数</div>
+            <div class="stat-value">23</div>
+            <div class="stat-change stat-up">↑ 5 本周</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">采纳建议</div>
+            <div class="stat-value">68%</div>
+            <div class="stat-change stat-up">↑ 12% 较上周</div>
+          </div>
+        </div>
+
+        <!-- Quick Upload -->
+        <div class="upload-zone" onclick="showToast('📄 上传功能演示中...')">
+          <div class="upload-icon">☁️</div>
+          <div class="upload-title">拖拽文件到这里，或点击上传</div>
+          <div class="upload-hint">支持 PDF / Word / Markdown / TXT · 最大 20MB</div>
+        </div>
+
+        <!-- Recent Documents -->
+        <div class="section-header">
+          <h2>📄 最近文档</h2>
+          <button class="btn-sm btn-sm-ghost" onclick="switchPage('documents')">查看全部 →</button>
+        </div>
+        <div class="doc-grid">
+          <div class="doc-card" onclick="switchPage('reviews')">
+            <div class="doc-card-header">
+              <div class="doc-type-icon doc-type-pdf">PDF</div>
+              <div>
+                <div class="doc-title">产品需求文档 v2.0</div>
+                <div class="doc-meta">5,200 字</div>
+              </div>
+            </div>
+            <div class="doc-tags">
+              <span class="doc-tag">产品</span>
+              <span class="doc-tag">PRD</span>
+            </div>
+            <div class="doc-footer">
+              <div class="doc-status"><span class="status-dot status-ready"></span> 已就绪</div>
+              <div class="doc-time">2 小时前</div>
+            </div>
+            <div class="doc-actions">
+              <button class="doc-btn doc-btn-primary" onclick="event.stopPropagation();showToast('🏛️ 发起评审...')">发起评审</button>
+              <button class="doc-btn">查看详情</button>
+            </div>
+          </div>
+
+          <div class="doc-card">
+            <div class="doc-card-header">
+              <div class="doc-type-icon doc-type-docx">DOC</div>
+              <div>
+                <div class="doc-title">技术架构方案 - 微服务拆分</div>
+                <div class="doc-meta">8,100 字</div>
+              </div>
+            </div>
+            <div class="doc-tags">
+              <span class="doc-tag">技术</span>
+              <span class="doc-tag">架构</span>
+            </div>
+            <div class="doc-footer">
+              <div class="doc-status"><span class="status-dot status-parsing"></span> 解析中...</div>
+              <div class="doc-time">10 分钟前</div>
+            </div>
+          </div>
+
+          <div class="doc-card" onclick="switchPage('reviews')">
+            <div class="doc-card-header">
+              <div class="doc-type-icon doc-type-md">MD</div>
+              <div>
+                <div class="doc-title">API 接口文档 v3.1</div>
+                <div class="doc-meta">3,200 字</div>
+              </div>
+            </div>
+            <div class="doc-tags">
+              <span class="doc-tag">API</span>
+              <span class="doc-tag">文档</span>
+            </div>
+            <div class="doc-footer">
+              <div class="doc-status"><span class="status-dot status-ready"></span> 已就绪</div>
+              <div class="doc-time">昨天</div>
+            </div>
+            <div class="doc-actions">
+              <button class="doc-btn doc-btn-primary" onclick="event.stopPropagation();showToast('🏛️ 发起评审...')">发起评审</button>
+              <button class="doc-btn">查看详情</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== Documents Page ========== -->
+    <div id="page-documents" class="page-section">
+      <div class="topbar">
+        <div class="topbar-title">📄 文档中心</div>
+        <div class="topbar-actions">
+          <input class="search-box" placeholder="搜索文档...">
+          <button class="btn-sm btn-sm-primary" onclick="showToast('📄 上传功能演示中...')">+ 上传文档</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="tab-bar">
+          <div class="tab active">全部文档</div>
+          <div class="tab">已就绪</div>
+          <div class="tab">解析中</div>
+          <div class="tab">解析失败</div>
+        </div>
+        <div class="doc-grid">
+          <div class="doc-card" onclick="switchPage('reviews')">
+            <div class="doc-card-header"><div class="doc-type-icon doc-type-pdf">PDF</div><div><div class="doc-title">产品需求文档 v2.0</div><div class="doc-meta">5,200 字 · 3 次评审</div></div></div>
+            <div class="doc-footer"><div class="doc-status"><span class="status-dot status-ready"></span> 已就绪</div><div class="doc-time">2 小时前</div></div>
+            <div class="doc-actions"><button class="doc-btn doc-btn-primary">发起评审</button><button class="doc-btn">详情</button></div>
+          </div>
+          <div class="doc-card">
+            <div class="doc-card-header"><div class="doc-type-icon doc-type-docx">DOC</div><div><div class="doc-title">技术架构方案</div><div class="doc-meta">8,100 字 · 0 次评审</div></div></div>
+            <div class="doc-footer"><div class="doc-status"><span class="status-dot status-parsing"></span> 解析中</div><div class="doc-time">10 分钟前</div></div>
+          </div>
+          <div class="doc-card" onclick="switchPage('reviews')">
+            <div class="doc-card-header"><div class="doc-type-icon doc-type-md">MD</div><div><div class="doc-title">API 接口文档 v3.1</div><div class="doc-meta">3,200 字 · 1 次评审</div></div></div>
+            <div class="doc-footer"><div class="doc-status"><span class="status-dot status-ready"></span> 已就绪</div><div class="doc-time">昨天</div></div>
+            <div class="doc-actions"><button class="doc-btn doc-btn-primary">发起评审</button><button class="doc-btn">详情</button></div>
+          </div>
+          <div class="doc-card" onclick="switchPage('reviews')">
+            <div class="doc-card-header"><div class="doc-type-icon doc-type-pdf">PDF</div><div><div class="doc-title">Q1 季度总结报告</div><div class="doc-meta">1,500 字 · 5 次评审</div></div></div>
+            <div class="doc-footer"><div class="doc-status"><span class="status-dot status-ready"></span> 已就绪</div><div class="doc-time">3 天前</div></div>
+            <div class="doc-actions"><button class="doc-btn doc-btn-primary">发起评审</button><button class="doc-btn">详情</button></div>
+          </div>
+          <div class="doc-card">
+            <div class="doc-card-header"><div class="doc-type-icon doc-type-pdf">PDF</div><div><div class="doc-title">用户调研分析报告</div><div class="doc-meta">4,800 字 · 2 次评审</div></div></div>
+            <div class="doc-footer"><div class="doc-status"><span class="status-dot status-ready"></span> 已就绪</div><div class="doc-time">5 天前</div></div>
+            <div class="doc-actions"><button class="doc-btn doc-btn-primary">发起评审</button><button class="doc-btn">详情</button></div>
+          </div>
+          <div class="doc-card">
+            <div class="doc-card-header"><div class="doc-type-icon doc-type-docx">DOC</div><div><div class="doc-title">竞品分析：AI 写作工具</div><div class="doc-meta">6,300 字 · 4 次评审</div></div></div>
+            <div class="doc-footer"><div class="doc-status"><span class="status-dot status-ready"></span> 已就绪</div><div class="doc-time">1 周前</div></div>
+            <div class="doc-actions"><button class="doc-btn doc-btn-primary">发起评审</button><button class="doc-btn">详情</button></div>
+          </div>
+          <div class="doc-card">
+            <div class="doc-card-header"><div class="doc-type-icon doc-type-md">MD</div><div><div class="doc-title">项目 README</div><div class="doc-meta">800 字 · 1 次评审</div></div></div>
+            <div class="doc-footer"><div class="doc-status"><span class="status-dot status-ready"></span> 已就绪</div><div class="doc-time">2 周前</div></div>
+            <div class="doc-actions"><button class="doc-btn doc-btn-primary">发起评审</button><button class="doc-btn">详情</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== Agents Page ========== -->
+    <div id="page-agents" class="page-section">
+      <div class="topbar">
+        <div class="topbar-title">🎭 Agent 工坊</div>
+        <div class="topbar-actions">
+          <button class="btn-sm btn-sm-primary" onclick="showToast('🎭 对话式创建 Agent...')">+ 创建新 Agent</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="tab-bar">
+          <div class="tab active">我的 Agent</div>
+          <div class="tab">模板库</div>
+          <div class="tab">社区</div>
+        </div>
+        <div class="agent-grid">
+          <div class="agent-card" style="border-left-color: #8B5CF6;">
+            <div class="agent-card-header">
+              <div class="agent-avatar" style="background: #F5F3FF; border-color: #8B5CF6; color: #8B5CF6;">💻</div>
+              <div><div class="agent-name">老张</div><div class="agent-tagline">毒舌但专业的技术Leader</div></div>
+            </div>
+            <div class="agent-desc">说话直接不留情面，但每句话都有道理。注重代码规范和性能优化。</div>
+            <div class="agent-tags">
+              <span class="agent-tag" style="background: #F5F3FF; color: #8B5CF6;">技术</span>
+              <span class="agent-tag" style="background: #F5F3FF; color: #8B5CF6;">架构</span>
+              <span class="agent-tag" style="background: #F5F3FF; color: #8B5CF6;">代码规范</span>
+            </div>
+            <div class="agent-usage">已使用 12 次 · 上次：2天前</div>
+            <div class="agent-card-actions"><button class="doc-btn doc-btn-primary" onclick="showToast('✅ 已选入评审团队')">选入团队</button><button class="doc-btn">编辑</button></div>
+          </div>
+
+          <div class="agent-card" style="border-left-color: #EC4899;">
+            <div class="agent-card-header">
+              <div class="agent-avatar" style="background: #FDF2F8; border-color: #EC4899; color: #EC4899;">📋</div>
+              <div><div class="agent-name">陈产品</div><div class="agent-tagline">务实的产品经理</div></div>
+            </div>
+            <div class="agent-desc">关注用户价值和商业回报。问最多的就是"用户真的需要吗？ROI如何？"</div>
+            <div class="agent-tags">
+              <span class="agent-tag" style="background: #FDF2F8; color: #EC4899;">产品</span>
+              <span class="agent-tag" style="background: #FDF2F8; color: #EC4899;">商业</span>
+              <span class="agent-tag" style="background: #FDF2F8; color: #EC4899;">用户价值</span>
+            </div>
+            <div class="agent-usage">已使用 8 次 · 上次：5天前</div>
+            <div class="agent-card-actions"><button class="doc-btn doc-btn-primary" onclick="showToast('✅ 已选入评审团队')">选入团队</button><button class="doc-btn">编辑</button></div>
+          </div>
+
+          <div class="agent-card" style="border-left-color: #F97316;">
+            <div class="agent-card-header">
+              <div class="agent-avatar" style="background: #FFF7ED; border-color: #F97316; color: #F97316;">🎨</div>
+              <div><div class="agent-name">小林</div><div class="agent-tagline">温柔细腻的 UX 设计师</div></div>
+            </div>
+            <div class="agent-desc">从用户体验角度审视一切。关注交互流程、视觉层次和可读性。</div>
+            <div class="agent-tags">
+              <span class="agent-tag" style="background: #FFF7ED; color: #F97316;">设计</span>
+              <span class="agent-tag" style="background: #FFF7ED; color: #F97316;">体验</span>
+              <span class="agent-tag" style="background: #FFF7ED; color: #F97316;">交互</span>
+            </div>
+            <div class="agent-usage">已使用 6 次 · 上次：1周前</div>
+            <div class="agent-card-actions"><button class="doc-btn doc-btn-primary" onclick="showToast('✅ 已选入评审团队')">选入团队</button><button class="doc-btn">编辑</button></div>
+          </div>
+
+          <div class="agent-card" style="border-left-color: #6366F1;">
+            <div class="agent-card-header">
+              <div class="agent-avatar" style="background: #EEF2FF; border-color: #6366F1; color: #6366F1;">🎓</div>
+              <div><div class="agent-name">李教授</div><div class="agent-tagline">温和严谨的学术导师</div></div>
+            </div>
+            <div class="agent-desc">注重逻辑论证的严密性。说话温和但要求很高，对数据来源特别敏感。</div>
+            <div class="agent-tags">
+              <span class="agent-tag" style="background: #EEF2FF; color: #6366F1;">学术</span>
+              <span class="agent-tag" style="background: #EEF2FF; color: #6366F1;">逻辑</span>
+              <span class="agent-tag" style="background: #EEF2FF; color: #6366F1;">论证</span>
+            </div>
+            <div class="agent-usage">已使用 15 次 · 上次：昨天</div>
+            <div class="agent-card-actions"><button class="doc-btn doc-btn-primary" onclick="showToast('✅ 已选入评审团队')">选入团队</button><button class="doc-btn">编辑</button></div>
+          </div>
+
+          <div class="agent-card" style="border-left-color: #0EA5E9;">
+            <div class="agent-card-header">
+              <div class="agent-avatar" style="background: #F0F9FF; border-color: #0EA5E9; color: #0EA5E9;">👔</div>
+              <div><div class="agent-name">赵总</div><div class="agent-tagline">简洁果断的高管</div></div>
+            </div>
+            <div class="agent-desc">只关心战略对齐和成本效益。说话极简，但一针见血。</div>
+            <div class="agent-tags">
+              <span class="agent-tag" style="background: #F0F9FF; color: #0EA5E9;">管理</span>
+              <span class="agent-tag" style="background: #F0F9FF; color: #0EA5E9;">决策</span>
+              <span class="agent-tag" style="background: #F0F9FF; color: #0EA5E9;">战略</span>
+            </div>
+            <div class="agent-usage">已使用 3 次 · 上次：3天前</div>
+            <div class="agent-card-actions"><button class="doc-btn doc-btn-primary" onclick="showToast('✅ 已选入评审团队')">选入团队</button><button class="doc-btn">编辑</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== Reviews Page ========== -->
+    <div id="page-reviews" class="page-section">
+      <div class="topbar">
+        <div class="topbar-title">🏛️ 评审大厅</div>
+        <div class="topbar-actions">
+          <button class="btn-sm btn-sm-primary" onclick="showToast('🏛️ 发起新评审...')">+ 发起评审</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="tab-bar">
+          <div class="tab active">全部评审</div>
+          <div class="tab">进行中</div>
+          <div class="tab">已完成</div>
+        </div>
+        <div class="review-grid">
+          <!-- Review Card 1 -->
+          <div class="review-card">
+            <div class="review-header">
+              <div class="review-doc-title">📄 产品需求文档 v2.0</div>
+              <div class="review-score"><span class="review-score-num">4.2</span><span class="review-score-star">★★★★☆</span></div>
+            </div>
+            <div class="review-agents">
+              <div class="review-agent-chip" style="background: #F5F3FF; color: #8B5CF6;">💻 老张</div>
+              <div class="review-agent-chip" style="background: #FDF2F8; color: #EC4899;">📋 陈产品</div>
+              <div class="review-agent-chip" style="background: #FFF7ED; color: #F97316;">🎨 小林</div>
+            </div>
+            <div class="review-body">
+              <div class="review-section-title">🤝 共识</div>
+              <div class="consensus-item">✓ 文档结构清晰，逻辑主线完整</div>
+              <div class="consensus-item">✓ 第三章数据支撑需要补充</div>
+              <div class="review-section-title" style="margin-top:12px;">⚡ 争议</div>
+              <div class="controversy-item">💻 老张: 技术可行 vs 📋 陈产品: ROI不足</div>
+              <div class="review-section-title" style="margin-top:12px;">💡 TOP 建议</div>
+              <div class="suggestion-item"><span class="suggestion-priority priority-high">高</span> 补充第三章数据来源</div>
+              <div class="suggestion-item"><span class="suggestion-priority priority-high">高</span> 增加用户场景描述</div>
+              <div class="suggestion-item"><span class="suggestion-priority priority-medium">中</span> 简化技术方案描述</div>
+            </div>
+            <div class="review-footer">
+              <button class="doc-btn doc-btn-primary" onclick="switchPage('chat')">💬 进入辩论</button>
+              <button class="doc-btn">查看完整报告</button>
+              <button class="doc-btn">重新评审</button>
+            </div>
+          </div>
+
+          <!-- Review Card 2 -->
+          <div class="review-card">
+            <div class="review-header">
+              <div class="review-doc-title">📄 API 接口文档 v3.1</div>
+              <div class="review-score"><span class="review-score-num">3.5</span><span class="review-score-star">★★★☆☆</span></div>
+            </div>
+            <div class="review-agents">
+              <div class="review-agent-chip" style="background: #F5F3FF; color: #8B5CF6;">💻 老张</div>
+              <div class="review-agent-chip" style="background: #F0FDF4; color: #22C55E;">📊 数据刘</div>
+            </div>
+            <div class="review-body">
+              <div class="review-section-title">🤝 共识</div>
+              <div class="consensus-item">✓ 接口命名规范统一</div>
+              <div class="review-section-title" style="margin-top:12px;">💡 TOP 建议</div>
+              <div class="suggestion-item"><span class="suggestion-priority priority-high">高</span> 缺少错误码定义</div>
+              <div class="suggestion-item"><span class="suggestion-priority priority-high">高</span> 请求/响应示例不足</div>
+              <div class="suggestion-item"><span class="suggestion-priority priority-medium">中</span> 鉴权方式未说明</div>
+            </div>
+            <div class="review-footer">
+              <button class="doc-btn doc-btn-primary" onclick="switchPage('chat')">💬 进入辩论</button>
+              <button class="doc-btn">查看完整报告</button>
+            </div>
+          </div>
+
+          <!-- Review Card 3 (In Progress) -->
+          <div class="review-card" style="border-color: #6366F1;">
+            <div class="review-header" style="background: #EEF2FF;">
+              <div class="review-doc-title">📄 Q1 季度总结报告</div>
+              <div style="font-size:12px; color:#6366F1; font-weight:600;">⏳ 评审中...</div>
+            </div>
+            <div class="review-agents">
+              <div class="review-agent-chip" style="background: #EEF2FF; color: #6366F1;">🎓 李教授</div>
+              <div class="review-agent-chip" style="background: #F0F9FF; color: #0EA5E9;">👔 赵总</div>
+              <div class="review-agent-chip" style="background: #F0FDF4; color: #22C55E;">📊 数据刘</div>
+            </div>
+            <div class="review-body" style="text-align:center; padding: 30px 20px; color: #6B7280; font-size: 13px;">
+              <div style="font-size: 28px; margin-bottom: 8px;">🤔</div>
+              3 位 Agent 正在评审中...<br>
+              <span style="font-size:18px; letter-spacing:2px;">●<span style="animation: pulse 1.5s infinite; opacity:0.3;">●</span><span style="animation: pulse 1.5s infinite 0.3s; opacity:0.3;">●</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== Chat Page ========== -->
+    <div id="page-chat" class="page-section">
+      <div class="topbar">
+        <div class="topbar-title">💬 评审辩论室</div>
+        <div class="topbar-actions">
+          <button class="btn-sm btn-sm-ghost">邀请 Agent</button>
+          <button class="btn-sm btn-sm-primary" onclick="showToast('📋 辩论总结已生成')">生成总结</button>
+        </div>
+      </div>
+      <div class="content">
+        <div style="display: flex; gap: 20px; height: calc(100vh - 140px);">
+          <!-- Left: Doc Preview -->
+          <div style="flex: 0 0 30%; background: white; border-radius: 12px; border: 1px solid #E5E7EB; padding: 20px; overflow-y: auto;">
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">📄 产品需求文档 v2.0</div>
+            <div style="font-size: 12px; color: #6B7280; line-height: 1.8;">
+              <p style="font-weight: 600; color: #111827; margin-bottom: 4px;">第三章 技术方案</p>
+              <p>本方案采用微服务架构，核心模块包括用户服务、订单服务和支付服务。</p>
+              <p style="background: #FEF3C7; padding: 4px 8px; border-radius: 4px; margin: 8px 0;">系统间通过消息队列进行异步通信，保证高可用性...</p>
+              <p>数据库方面，主库使用 PostgreSQL，缓存层使用 Redis。预计 QPS 可达 10,000...</p>
+            </div>
+            <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #F3F4F6;">
+              <div style="font-size: 11px; font-weight: 600; color: #9CA3AF; margin-bottom: 8px;">在线 AGENT</div>
+              <div style="display: flex; gap: 8px;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: #F5F3FF; border: 2px solid #8B5CF6; display: flex; align-items: center; justify-content: center; font-size: 14px;">💻</div>
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: #FDF2F8; border: 2px solid #EC4899; display: flex; align-items: center; justify-content: center; font-size: 14px;">📋</div>
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: #FFF7ED; border: 2px solid #F97316; display: flex; align-items: center; justify-content: center; font-size: 14px;">🎨</div>
+              </div>
+            </div>
+          </div>
+          <!-- Right: Chat Area -->
+          <div style="flex: 1; display: flex; flex-direction: column; background: white; border-radius: 12px; border: 1px solid #E5E7EB; overflow: hidden;">
+            <!-- Topic -->
+            <div style="padding: 12px 20px; background: #FAFAFA; border-bottom: 1px solid #E5E7EB; font-size: 13px; color: #6B7280;">
+              📌 争议话题：第三章方案的技术可行性与商业价值
+            </div>
+            <!-- Messages -->
+            <div style="flex: 1; padding: 20px; overflow-y: auto;">
+              <!-- User message -->
+              <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
+                <div style="max-width: 65%; background: #F3F4F6; padding: 12px 16px; border-radius: 12px 12px 4px 12px; font-size: 14px; line-height: 1.6;">
+                  第三章的方案到底行不行？技术Leader说可行，产品经理说ROI不够，我到底该听谁的？
+                </div>
+              </div>
+              <!-- Agent message - 老张 -->
+              <div style="margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                  <div style="width: 24px; height: 24px; border-radius: 50%; background: #8B5CF6; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px;">💻</div>
+                  <span style="font-size: 13px; font-weight: 600;">老张</span>
+                  <span style="font-size: 11px; color: #9CA3AF;">2 分钟前</span>
+                </div>
+                <div style="margin-left: 30px; background: #F5F3FF; border-left: 3px solid #8B5CF6; padding: 12px 16px; border-radius: 0 10px 10px 0; font-size: 13px; line-height: 1.7;">
+                  方案技术上是可行的，这点没问题。微服务+消息队列的选型在这个量级下完全 hold 住。但我得说清楚——QPS 10,000 的预估确实偏乐观，需要压测验证。
+                  <div style="margin-top: 8px; padding: 8px; background: white; border-radius: 6px; font-size: 12px; color: #6B7280;">
+                    📄 引用："预计 QPS 可达 10,000"
+                  </div>
+                </div>
+              </div>
+              <!-- Agent message - 陈产品 -->
+              <div style="margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                  <div style="width: 24px; height: 24px; border-radius: 50%; background: #EC4899; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px;">📋</div>
+                  <span style="font-size: 13px; font-weight: 600;">陈产品</span>
+                  <span style="font-size: 11px; color: #9CA3AF;">2 分钟前</span>
+                </div>
+                <div style="margin-left: 30px; background: #FDF2F8; border-left: 3px solid #EC4899; padding: 12px 16px; border-radius: 0 10px 10px 0; font-size: 13px; line-height: 1.7;">
+                  我不是否定技术方案，我是说——用户真的需要 10,000 QPS 吗？当前日活才 500 人。如果是为了"未来扩展性"，那投入产出比怎么算？我觉得应该先做用户调研，确认真实需求再来定技术目标。
+                </div>
+              </div>
+              <!-- Agent interaction - 老张回应陈产品 -->
+              <div style="margin-bottom: 20px; margin-left: 30px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                  <div style="width: 22px; height: 22px; border-radius: 50%; background: #8B5CF6; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px;">💻</div>
+                  <span style="font-size: 12px; color: #6B7280;">老张 → 陈产品</span>
+                </div>
+                <div style="background: #FAF5FF; border-left: 3px solid #8B5CF6; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 12px; line-height: 1.6; color: #374151;">
+                  你说的有道理，但如果架构一开始不规划好，后面改造成本是 10 倍。不如分阶段——先按 2,000 QPS 部署，架构预留扩展空间。
+                </div>
+              </div>
+              <!-- Agent message - 小林 -->
+              <div style="margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                  <div style="width: 24px; height: 24px; border-radius: 50%; background: #F97316; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px;">🎨</div>
+                  <span style="font-size: 13px; font-weight: 600;">小林</span>
+                  <span style="font-size: 11px; color: #9CA3AF;">1 分钟前</span>
+                </div>
+                <div style="margin-left: 30px; background: #FFF7ED; border-left: 3px solid #F97316; padding: 12px 16px; border-radius: 0 10px 10px 0; font-size: 13px; line-height: 1.7;">
+                  从用户体验角度，我更关心文档里完全没提到用户操作流程。微服务对用户是不可见的，但交互流程是用户直接感知的。建议先补充用户旅程图。
+                </div>
+              </div>
+            </div>
+            <!-- Input Area -->
+            <div style="padding: 16px 20px; border-top: 1px solid #E5E7EB; display: flex; gap: 10px; align-items: flex-end;">
+              <div style="flex: 1; position: relative;">
+                <textarea style="width: 100%; padding: 10px 14px; border: 1px solid #D1D5DB; border-radius: 10px; font-size: 13px; font-family: inherit; resize: none; height: 42px; outline: none;" placeholder="输入消息... @Agent名 指定回复" onfocus="this.style.borderColor='#6366F1';this.style.boxShadow='0 0 0 3px rgba(99,102,241,0.15)'" onblur="this.style.borderColor='#D1D5DB';this.style.boxShadow='none'"></textarea>
+              </div>
+              <button style="padding: 10px 20px; background: #4F46E5; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; white-space: nowrap;" onclick="showToast('💬 消息已发送')">发送 →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <script>
+    function switchPage(page) {
+      document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      document.getElementById('page-' + page).classList.add('active');
+      const navMap = { dashboard: 0, documents: 1, agents: 2, reviews: 3, chat: 4 };
+      const navItems = document.querySelectorAll('.nav-item');
+      if (navItems[navMap[page]]) navItems[navMap[page]].classList.add('active');
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+  </script>
+</body>
+</html>

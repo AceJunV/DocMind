@@ -1,0 +1,33 @@
+{
+  "current_stage": 6,
+  "stages": {
+    "0": {
+      "completed": false,
+      "outputs": []
+    },
+    "1": {
+      "completed": false,
+      "outputs": []
+    },
+    "2": {
+      "completed": false,
+      "outputs": []
+    },
+    "3": {
+      "completed": false,
+      "outputs": []
+    },
+    "4": {
+      "completed": false,
+      "outputs": []
+    },
+    "5": {
+      "completed": false,
+      "outputs": []
+    },
+    "6": {
+      "completed": false,
+      "outputs": []
+    }
+  }
+}

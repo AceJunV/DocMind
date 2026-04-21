@@ -1,0 +1,62 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Suspense, lazy } from 'react'
+import { MainLayout } from '@/components/layout/MainLayout'
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { ToastContainer } from '@/components/ui/Toast'
+
+const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
+const DocumentListPage = lazy(() => import('@/pages/documents/DocumentListPage'))
+const DocumentDetailPage = lazy(() => import('@/pages/documents/DocumentDetailPage'))
+const AgentListPage = lazy(() => import('@/pages/agents/AgentListPage'))
+const AgentCreatePage = lazy(() => import('@/pages/agents/AgentCreatePage'))
+const AgentEditPage = lazy(() => import('@/pages/agents/AgentEditPage'))
+const ReviewListPage = lazy(() => import('@/pages/reviews/ReviewListPage'))
+const ReviewCreatePage = lazy(() => import('@/pages/reviews/ReviewCreatePage'))
+const ReviewDetailPage = lazy(() => import('@/pages/reviews/ReviewDetailPage'))
+const ChatListPage = lazy(() => import('@/pages/chat/ChatListPage'))
+const ChatRoomPage = lazy(() => import('@/pages/chat/ChatRoomPage'))
+const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage'))
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
+
+function PageLoader() {
+  return (
+    <div className="flex h-64 items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-primary-200 border-t-primary-600" />
+    </div>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <ToastContainer />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/documents" element={<DocumentListPage />} />
+            <Route path="/documents/:id" element={<DocumentDetailPage />} />
+            <Route path="/agents" element={<AgentListPage />} />
+            <Route path="/agents/create" element={<AgentCreatePage />} />
+            <Route path="/agents/:id/edit" element={<AgentEditPage />} />
+            <Route path="/reviews" element={<ReviewListPage />} />
+            <Route path="/reviews/create" element={<ReviewCreatePage />} />
+            <Route path="/reviews/:id" element={<ReviewDetailPage />} />
+            <Route path="/chat" element={<ChatListPage />} />
+            <Route path="/chat/:id" element={<ChatRoomPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Route>
+
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
+  )
+}

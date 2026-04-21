@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocMind — 多角色 AI Agent 文档评审平台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', "PingFang SC", "Microsoft YaHei", sans-serif; color: #111827; background: #FFFFFF; }
+    a { text-decoration: none; color: inherit; }
+
+    /* ===== Header ===== */
+    .header { position: fixed; top: 0; left: 0; right: 0; height: 64px; background: rgba(255,255,255,0.92); backdrop-filter: blur(12px); border-bottom: 1px solid #E5E7EB; z-index: 100; display: flex; align-items: center; padding: 0 32px; }
+    .header-inner { max-width: 1200px; margin: 0 auto; width: 100%; display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; color: #4F46E5; }
+    .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, #6366F1, #4F46E5); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 18px; }
+    .nav-links { display: flex; gap: 32px; }
+    .nav-links a { font-size: 14px; font-weight: 500; color: #6B7280; transition: color 0.2s; }
+    .nav-links a:hover { color: #4F46E5; }
+    .header-actions { display: flex; gap: 12px; align-items: center; }
+    .btn-ghost { padding: 8px 16px; font-size: 14px; font-weight: 500; border: none; background: none; color: #374151; cursor: pointer; border-radius: 8px; transition: background 0.15s; }
+    .btn-ghost:hover { background: #F3F4F6; }
+    .btn-primary { padding: 8px 20px; font-size: 14px; font-weight: 600; border: none; background: #4F46E5; color: white; cursor: pointer; border-radius: 8px; transition: background 0.15s, transform 0.1s; }
+    .btn-primary:hover { background: #4338CA; transform: translateY(-1px); }
+
+    /* ===== Hero ===== */
+    .hero { padding: 140px 32px 80px; background: linear-gradient(180deg, #F5F3FF 0%, #FFFFFF 100%); text-align: center; }
+    .hero-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px; background: #EEF2FF; color: #4F46E5; border-radius: 9999px; font-size: 13px; font-weight: 600; margin-bottom: 24px; }
+    .hero h1 { font-size: 52px; font-weight: 800; line-height: 1.15; color: #111827; max-width: 760px; margin: 0 auto 20px; letter-spacing: -0.02em; }
+    .hero h1 span { background: linear-gradient(135deg, #6366F1, #8B5CF6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero p { font-size: 18px; line-height: 1.7; color: #6B7280; max-width: 560px; margin: 0 auto 40px; }
+    .hero-actions { display: flex; gap: 16px; justify-content: center; }
+    .btn-hero { padding: 14px 32px; font-size: 16px; font-weight: 600; border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+    .btn-hero-primary { background: #4F46E5; color: white; box-shadow: 0 4px 14px rgba(79,70,229,0.35); }
+    .btn-hero-primary:hover { background: #4338CA; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(79,70,229,0.4); }
+    .btn-hero-secondary { background: white; color: #374151; border: 1px solid #D1D5DB; }
+    .btn-hero-secondary:hover { background: #F9FAFB; border-color: #9CA3AF; }
+
+    /* ===== Demo Preview ===== */
+    .demo-section { padding: 0 32px 80px; }
+    .demo-card { max-width: 1000px; margin: 0 auto; background: #FFFFFF; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #E5E7EB; }
+    .demo-header { height: 40px; background: #F9FAFB; border-bottom: 1px solid #E5E7EB; display: flex; align-items: center; padding: 0 16px; gap: 8px; }
+    .demo-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .demo-dot-red { background: #EF4444; }
+    .demo-dot-yellow { background: #F59E0B; }
+    .demo-dot-green { background: #10B981; }
+    .demo-body { display: flex; min-height: 460px; }
+    .demo-doc { flex: 0 0 45%; padding: 24px; border-right: 1px solid #E5E7EB; font-size: 13px; line-height: 1.8; color: #374151; }
+    .demo-doc h3 { font-size: 16px; font-weight: 600; color: #111827; margin-bottom: 12px; }
+    .demo-doc .highlight { background: #FEF3C7; padding: 2px 4px; border-radius: 4px; }
+    .demo-review { flex: 1; padding: 24px; background: #FAFAFA; }
+    .demo-score { text-align: center; margin-bottom: 20px; }
+    .demo-score-number { font-size: 42px; font-weight: 800; color: #4F46E5; }
+    .demo-score-label { font-size: 12px; color: #6B7280; margin-top: 4px; }
+    .demo-agent { padding: 12px 16px; border-radius: 10px; margin-bottom: 10px; font-size: 13px; line-height: 1.6; }
+    .demo-agent-indigo { background: #EEF2FF; border-left: 3px solid #6366F1; }
+    .demo-agent-violet { background: #F5F3FF; border-left: 3px solid #8B5CF6; }
+    .demo-agent-pink { background: #FDF2F8; border-left: 3px solid #EC4899; }
+    .demo-agent-name { font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+    .demo-agent-avatar { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; }
+    .demo-agent-indigo .demo-agent-avatar { background: #6366F1; }
+    .demo-agent-violet .demo-agent-avatar { background: #8B5CF6; }
+    .demo-agent-pink .demo-agent-avatar { background: #EC4899; }
+
+    /* ===== Features ===== */
+    .features { padding: 80px 32px; background: #FFFFFF; }
+    .section-title { text-align: center; margin-bottom: 56px; }
+    .section-title h2 { font-size: 36px; font-weight: 700; margin-bottom: 12px; }
+    .section-title p { font-size: 16px; color: #6B7280; max-width: 500px; margin: 0 auto; }
+    .features-grid { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+    .feature-card { padding: 28px; border-radius: 16px; border: 1px solid #E5E7EB; background: white; transition: all 0.2s; }
+    .feature-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,0.06); border-color: #C7D2FE; }
+    .feature-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; margin-bottom: 16px; }
+    .feature-icon-doc { background: #EEF2FF; }
+    .feature-icon-agent { background: #F5F3FF; }
+    .feature-icon-review { background: #ECFDF5; }
+    .feature-icon-chat { background: #FFF7ED; }
+    .feature-icon-team { background: #FDF2F8; }
+    .feature-icon-share { background: #EFF6FF; }
+    .feature-card h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+    .feature-card p { font-size: 14px; color: #6B7280; line-height: 1.7; }
+
+    /* ===== How it Works ===== */
+    .how-it-works { padding: 80px 32px; background: #F5F3FF; }
+    .steps { max-width: 900px; margin: 0 auto; display: flex; gap: 24px; }
+    .step { flex: 1; text-align: center; position: relative; }
+    .step-number { width: 40px; height: 40px; border-radius: 50%; background: #4F46E5; color: white; font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+    .step h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .step p { font-size: 13px; color: #6B7280; line-height: 1.6; }
+    .step-arrow { position: absolute; top: 20px; right: -20px; color: #C7D2FE; font-size: 20px; }
+
+    /* ===== Agent Showcase ===== */
+    .agents-showcase { padding: 80px 32px; background: white; }
+    .agents-grid { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+    .agent-showcase-card { padding: 20px; border-radius: 12px; border: 1px solid #E5E7EB; text-align: center; transition: all 0.2s; }
+    .agent-showcase-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
+    .agent-avatar-lg { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; margin: 0 auto 10px; border: 2px solid; }
+    .agent-showcase-card h4 { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+    .agent-showcase-card p { font-size: 12px; color: #6B7280; }
+
+    /* ===== CTA ===== */
+    .cta { padding: 80px 32px; background: linear-gradient(135deg, #4F46E5, #7C3AED); text-align: center; color: white; }
+    .cta h2 { font-size: 36px; font-weight: 700; margin-bottom: 12px; }
+    .cta p { font-size: 16px; opacity: 0.85; margin-bottom: 32px; max-width: 480px; margin-left: auto; margin-right: auto; }
+    .btn-cta { padding: 14px 36px; font-size: 16px; font-weight: 600; background: white; color: #4F46E5; border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+    .btn-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
+
+    /* ===== Footer ===== */
+    .footer { padding: 40px 32px; background: #111827; color: #9CA3AF; text-align: center; font-size: 13px; }
+    .footer a { color: #9CA3AF; margin: 0 12px; }
+    .footer a:hover { color: white; }
+
+    /* ===== Animations ===== */
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-in { animation: fadeInUp 0.6s ease-out forwards; }
+    .delay-1 { animation-delay: 0.1s; opacity: 0; }
+    .delay-2 { animation-delay: 0.2s; opacity: 0; }
+    .delay-3 { animation-delay: 0.3s; opacity: 0; }
+    @keyframes thinking { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
+    .thinking-dot { display: inline-block; animation: thinking 1.4s infinite; }
+    .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">D</div>
+        DocMind
+      </div>
+      <nav class="nav-links">
+        <a href="#features">功能</a>
+        <a href="#how-it-works">使用方式</a>
+        <a href="#agents">角色库</a>
+      </nav>
+      <div class="header-actions">
+        <button class="btn-ghost" onclick="window.location.href='homepage.html'">登录</button>
+        <button class="btn-primary" onclick="window.location.href='homepage.html'">免费开始</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-badge animate-in">✨ 全新 AI 多角色评审体验</div>
+    <h1 class="animate-in delay-1">让每一份文档<br>都被<span>认真对待</span></h1>
+    <p class="animate-in delay-2">上传文档，创建不同身份的 AI Agent 组成评审团队。从多个视角审视你的文档，在角色碰撞中发现盲区、激发优化方向。</p>
+    <div class="hero-actions animate-in delay-3">
+      <button class="btn-hero btn-hero-primary" onclick="window.location.href='homepage.html'">免费开始评审 →</button>
+      <button class="btn-hero btn-hero-secondary">观看演示 ▶</button>
+    </div>
+  </section>
+
+  <!-- Demo Preview -->
+  <section class="demo-section">
+    <div class="demo-card">
+      <div class="demo-header">
+        <div class="demo-dot demo-dot-red"></div>
+        <div class="demo-dot demo-dot-yellow"></div>
+        <div class="demo-dot demo-dot-green"></div>
+      </div>
+      <div class="demo-body">
+        <div class="demo-doc">
+          <h3>📄 产品需求文档 v2.0</h3>
+          <p><strong>第三章 技术方案</strong></p>
+          <p>本方案采用微服务架构，核心模块包括用户服务、订单服务和支付服务。系统间通过消息队列进行异步通信，保证高可用性...</p>
+          <p>数据库方面，主库使用 <span class="highlight">PostgreSQL</span>，缓存层使用 Redis。预计 QPS 可达 <span class="highlight">10,000</span>...</p>
+          <p style="margin-top: 16px; color: #6B7280; font-size: 12px;">第三章 · 技术细节 · 2,100字</p>
+        </div>
+        <div class="demo-review">
+          <div class="demo-score">
+            <div class="demo-score-number">4.2</div>
+            <div style="color: #F59E0B; font-size: 16px;">★★★★☆</div>
+            <div class="demo-score-label">综合评分 · 3 位 Agent 评审</div>
+          </div>
+          <div class="demo-agent demo-agent-violet">
+            <div class="demo-agent-name">
+              <span class="demo-agent-avatar" style="color:white;">💻</span>
+              老张 · 技术Leader <span style="color:#8B5CF6; font-weight:400; font-size:12px;">4.0</span>
+            </div>
+            架构选择合理，但消息队列的选型缺少对比论证。PostgreSQL + Redis 方案中规中矩，QPS 预估偏乐观。
+          </div>
+          <div class="demo-agent demo-agent-pink">
+            <div class="demo-agent-name">
+              <span class="demo-agent-avatar" style="color:white;">📋</span>
+              陈产品 · 产品经理 <span style="color:#EC4899; font-weight:400; font-size:12px;">3.8</span>
+            </div>
+            技术方案写得不错，但缺少和用户场景的关联。用户真的需要 10,000 QPS 吗？ROI 如何？
+          </div>
+          <div class="demo-agent demo-agent-indigo">
+            <div class="demo-agent-name">
+              <span class="demo-agent-avatar" style="color:white;">🎨</span>
+              小林 · UX 设计师 <span style="color:#6366F1; font-weight:400; font-size:12px;">4.8</span>
+            </div>
+            文档结构清晰，技术细节充分。建议增加架构图辅助理解。
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features" id="features">
+    <div class="section-title">
+      <h2>为什么选择 DocMind</h2>
+      <p>六个核心能力，让你的文档评审从"一个人反复看"变成"多角色碰撞"</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-doc">📄</div>
+        <h3>智能文档解析</h3>
+        <p>上传 PDF、Word、Markdown 文档，自动提取结构、关键词和摘要。无需手动整理。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-agent">🎭</div>
+        <h3>对话式创建 Agent</h3>
+        <p>跟 AI 聊几句，就能创建一个有性格、有专业领域的评审角色。也可以从模板库一键选用。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-review">📊</div>
+        <h3>多角色并行评审</h3>
+        <p>1-5 个 Agent 同时评审，各抒己见。自动提炼共识点和争议点，排序优化建议。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-chat">💬</div>
+        <h3>角色辩论聊天室</h3>
+        <p>对评审结果有疑问？拉 Agent 进聊天室辩论。Agent 之间还会自动碰撞观点。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-team">🤝</div>
+        <h3>同事 Agent 推荐</h3>
+        <p>创建一个角色后，系统自动推荐互补的"同事"。一键生成完整的评审团队。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-share">🌍</div>
+        <h3>Agent 社区共享</h3>
+        <p>把调教好的 Agent 分享给社区，或使用他人创建的优质角色。越用越丰富。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it Works -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="section-title">
+      <h2>三步完成评审</h2>
+      <p>简单三步，从上传文档到获得多角色反馈</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <h3>上传文档</h3>
+        <p>拖拽上传你的 PDF、Word 或 Markdown 文档，系统自动解析内容。</p>
+        <div class="step-arrow">→</div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <h3>选择 Agent 团队</h3>
+        <p>从模板库或你的 Agent 库中选 1-5 个角色，组成评审团队。</p>
+        <div class="step-arrow">→</div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <h3>获得评审报告</h3>
+        <p>多角色并行评审，秒级获得评分、观点、共识、争议和优化建议。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Agent Showcase -->
+  <section class="agents-showcase" id="agents">
+    <div class="section-title">
+      <h2>8 个预设评审角色</h2>
+      <p>精心设计的角色模板，覆盖文档评审的核心视角</p>
+    </div>
+    <div class="agents-grid">
+      <div class="agent-showcase-card">
+        <div class="agent-avatar-lg" style="background: #EEF2FF; border-color: #6366F1; color: #6366F1;">🎓</div>
+        <h4>李教授</h4>
+        <p>学术导师<br>温和严谨</p>
+      </div>
+      <div class="agent-showcase-card">
+        <div class="agent-avatar-lg" style="background: #F5F3FF; border-color: #8B5CF6; color: #8B5CF6;">💻</div>
+        <h4>老张</h4>
+        <p>技术Leader<br>直接毒舌</p>
+      </div>
+      <div class="agent-showcase-card">
+        <div class="agent-avatar-lg" style="background: #FDF2F8; border-color: #EC4899; color: #EC4899;">📋</div>
+        <h4>陈产品</h4>
+        <p>产品经理<br>务实高效</p>
+      </div>
+      <div class="agent-showcase-card">
+        <div class="agent-avatar-lg" style="background: #FFF7ED; border-color: #F97316; color: #F97316;">🎨</div>
+        <h4>小林</h4>
+        <p>UX 设计师<br>温柔细腻</p>
+      </div>
+      <div class="agent-showcase-card">
+        <div class="agent-avatar-lg" style="background: #F0FDFA; border-color: #14B8A6; color: #14B8A6;">👨‍🎓</div>
+        <h4>小王</h4>
+        <p>大学生<br>好奇单纯</p>
+      </div>
+      <div class="agent-showcase-card">
+        <div class="agent-avatar-lg" style="background: #F0F9FF; border-color: #0EA5E9; color: #0EA5E9;">👔</div>
+        <h4>赵总</h4>
+        <p>高管决策者<br>简洁果断</p>
+      </div>
+      <div class="agent-showcase-card">
+        <div class="agent-avatar-lg" style="background: #F8FAFC; border-color: #64748B; color: #64748B;">⚖️</div>
+        <h4>孙律师</h4>
+        <p>法务合规<br>严谨保守</p>
+      </div>
+      <div class="agent-showcase-card">
+        <div class="agent-avatar-lg" style="background: #F0FDF4; border-color: #22C55E; color: #22C55E;">📊</div>
+        <h4>数据刘</h4>
+        <p>数据分析师<br>理性客观</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <h2>开始你的多角色评审</h2>
+    <p>免费注册，上传第一份文档，体验 AI Agent 带来的全新评审方式。</p>
+    <button class="btn-cta" onclick="window.location.href='homepage.html'">免费开始 →</button>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div style="margin-bottom: 12px;">
+      <a href="#">关于我们</a>
+      <a href="#">使用文档</a>
+      <a href="#">API</a>
+      <a href="#">联系方式</a>
+    </div>
+    <div>© 2026 DocMind. All rights reserved.</div>
+  </footer>
+</body>
+</html>
