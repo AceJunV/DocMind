@@ -11,16 +11,16 @@ export function AuthLayout() {
             <span className="text-3xl font-bold">DocMind</span>
           </div>
           <h1 className="text-4xl font-bold leading-tight mb-4">
-            多角色 AI Agent
+            多角色 AI
             <br />
-            文档评审平台
+            教研案评审平台
           </h1>
           <p className="text-lg text-white/80 leading-relaxed">
-            上传文档，创建不同身份的 AI Agent 组成评审团队，获得多视角评价与优化建议。
-            进入聊天室与 Agent 深度辩论，通过角色碰撞发现盲区。
+            上传教研案，教研老师、学生、家长多视角评审，六维度精准分析。
+            进入教研研讨室深度讨论，发现教学设计的改进空间。
           </p>
           <div className="mt-10 flex gap-4">
-            {['🎓 李教授', '💻 老张', '📋 陈产品', '🎨 小林'].map((name) => (
+            {['📐 周老师', '🎒 小明', '📈 刘妈妈', '🧩 张老师'].map((name) => (
               <div
                 key={name}
                 className="rounded-full bg-white/15 backdrop-blur px-3 py-1.5 text-sm font-medium"

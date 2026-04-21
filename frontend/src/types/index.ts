@@ -18,13 +18,39 @@ export interface Document {
   keywords?: string[]
   summary?: string
   word_count?: number
+  teaching_plan?: TeachingPlanFields
   status: 'uploading' | 'parsing' | 'ready' | 'error'
   review_count: number
   created_at: string
   updated_at?: string
 }
 
-export type AgentColor = 'indigo' | 'violet' | 'pink' | 'orange' | 'teal' | 'sky' | 'slate' | 'green'
+export type AgentColor = 'indigo' | 'violet' | 'pink' | 'orange' | 'teal' | 'sky' | 'slate' | 'green' | 'rose' | 'amber' | 'emerald' | 'cyan'
+
+export type TeachingDimension = '课程设计' | '知识链' | '教学目标' | '课程重点' | '课程难点' | '学习梯度'
+
+export const TEACHING_DIMENSIONS: TeachingDimension[] = ['课程设计', '知识链', '教学目标', '课程重点', '课程难点', '学习梯度']
+
+export interface TeachingPlanFields {
+  subject?: string
+  grade?: string
+  topic?: string
+  duration?: string
+  objectives?: {
+    knowledge?: string
+    process?: string
+    emotion?: string
+  }
+  keyPoints?: string[]
+  difficulties?: string[]
+  teachingProcess?: {
+    stage: string
+    content: string
+    duration?: string
+  }[]
+  boardDesign?: string
+  reflection?: string
+}
 
 export interface AgentPersonality {
   directness: number
@@ -51,8 +77,13 @@ export interface Agent {
   is_public: boolean
   usage_count: number
   color: AgentColor
+  category?: AgentCategory
+  focusDimension?: TeachingDimension
+  creation_history?: { role: 'ai' | 'user'; content: string }[]
   created_at: string
 }
+
+export type AgentCategory = 'teacher' | 'student' | 'parent'
 
 export interface AgentTemplate {
   id: string
@@ -61,6 +92,8 @@ export interface AgentTemplate {
   tagline: string
   tags: string[]
   description: string
+  category: AgentCategory
+  focusDimension?: TeachingDimension
   personality: AgentPersonality
   expertise: string[]
   behavior: {

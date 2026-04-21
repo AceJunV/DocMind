@@ -12,10 +12,10 @@ import {
 } from 'lucide-react'
 
 const QUICK_ACTIONS = [
-  { icon: Upload, label: '上传文档', desc: '支持 PDF/Word/MD/TXT', path: '/documents', color: 'bg-blue-50 text-blue-600' },
-  { icon: Plus, label: '创建 Agent', desc: '定制你的评审角色', path: '/agents', color: 'bg-purple-50 text-purple-600' },
+  { icon: Upload, label: '上传教研案', desc: '支持 PDF/Word/MD/TXT', path: '/documents', color: 'bg-blue-50 text-blue-600' },
+  { icon: Plus, label: '创建角色', desc: '定制你的评审角色', path: '/agents', color: 'bg-purple-50 text-purple-600' },
   { icon: ClipboardCheck, label: '发起评审', desc: '多角色并行评审', path: '/reviews', color: 'bg-emerald-50 text-emerald-600' },
-  { icon: MessageCircle, label: '进入聊天室', desc: '与 Agent 深度辩论', path: '/chat', color: 'bg-orange-50 text-orange-600' },
+  { icon: MessageCircle, label: '教研研讨', desc: '与评审团深度讨论', path: '/chat', color: 'bg-orange-50 text-orange-600' },
 ]
 
 const TYPE_DOT: Record<Activity['type'], string> = {
@@ -44,7 +44,7 @@ export default function DashboardPage() {
 
   const stats = [
     { label: '文档总数', value: documents.length, icon: FileText, trend: `${documents.filter((d) => d.status === 'ready').length} 已就绪`, cta: { label: '上传第一个文档', path: '/documents' } },
-    { label: 'Agent 数量', value: agents.length, icon: Bot, trend: `${agents.filter((a) => a.source === 'template').length} 来自模板`, cta: { label: '添加第一个 Agent', path: '/agents' } },
+    { label: '评审角色', value: agents.length, icon: Bot, trend: `${agents.filter((a) => a.source === 'template').length} 来自模板`, cta: { label: '添加第一个角色', path: '/agents' } },
     { label: '评审次数', value: reviews.length, icon: ClipboardCheck, trend: `${reviews.filter((r) => r.status === 'completed').length} 已完成`, cta: { label: '发起第一次评审', path: '/reviews/create' } },
     { label: '聊天室', value: rooms.length, icon: MessageCircle, trend: `${rooms.filter((r) => r.status === 'active').length} 活跃中`, cta: { label: '创建聊天室', path: '/chat' } },
   ]
@@ -57,7 +57,7 @@ export default function DashboardPage() {
           你好，{user?.name || '用户'}
         </h1>
         <p className="mt-1 text-white/80">
-          欢迎回到 DocMind，让 AI 评审团帮你发现更多盲区
+          欢迎回到 DocMind，让教研评审团帮你发现教学设计的改进空间
         </p>
       </div>
 
@@ -122,7 +122,7 @@ export default function DashboardPage() {
           <div className="py-12 text-center">
             <Clock className="mx-auto h-10 w-10 text-gray-300 mb-2" />
             <p className="text-sm text-gray-500">暂无动态</p>
-            <p className="text-xs text-gray-400 mt-1">开始上传文档或创建 Agent 吧</p>
+            <p className="text-xs text-gray-400 mt-1">开始上传教研案或创建评审角色吧</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-50">

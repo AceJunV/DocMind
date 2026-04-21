@@ -7,46 +7,72 @@ import { chatCompletion, LLMError } from '@/services/llmService'
 import { isModelConfigValid } from '@/stores/settingsStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { toast } from '@/components/ui/Toast'
-import type { Agent, AgentColor } from '@/types'
+import { createId } from '@/utils/id'
+import type { Agent, AgentColor, AgentCategory } from '@/types'
 
-const ALL_COLORS: AgentColor[] = ['indigo', 'violet', 'pink', 'orange', 'teal', 'sky', 'slate', 'green']
+const ALL_COLORS: AgentColor[] = ['indigo', 'violet', 'pink', 'orange', 'teal', 'sky', 'slate', 'green', 'rose', 'amber', 'emerald', 'cyan']
 
 interface ChatMsg {
   role: 'ai' | 'user'
   content: string
 }
 
-const GUIDED_CREATION_PROMPT = `你是 DocMind 的 Agent 创建助手。你的目标是通过**分步引导**帮用户创建一个文档评审角色。
+const GUIDED_CREATION_PROMPT = `你是教研评审平台的角色创建助手。你的目标是通过**分步引导**帮教研老师创建一个教研案评审角色。
 
-## 对话流程（严格按顺序进行）
+## 对话流程（严格按顺序进行，每次只问一个问题）
 
-### 第1步：确认行业/领域
-你需要先问用户这个角色属于什么行业或领域。给出 4-5 个选项让用户选择或自定义。
-比如：技术/产品/设计/教育/法律/金融/管理... 等。
+### 第1步：确认角色类型
+首先问用户想创建什么类型的角色：
+A. 👨‍🏫 教研老师视角 — 专业的教学设计审视
+B. 🎒 学生视角 — 模拟学生的学习感受
+C. 👨‍👩‍👧 家长视角 — 家长对教学的关注点
+D. 🎭 自定义视角 — 完全自由设计
 
-### 第2步：确认性格特点
-用户回答后，询问性格偏好。给出选项：
-A. 严格认真型 — 标准高，直言不讳
-B. 温和友善型 — 善于鼓励，同理心强  
-C. 直接犀利型 — 一针见血，不留情面
-D. 幽默风趣型 — 轻松活泼，喜欢用比喻
-让用户选一个或描述自定义性格。
+### 第2步：细化角色定位
+根据用户选择的类型，进一步细化：
 
-### 第3步：确认关注重点
-问用户希望这个角色在评审文档时重点关注什么。给出参考：
-- 逻辑论证 / 数据准确 / 用户体验 / 可行性 / 文字表达 / 创新性 / 合规风险
+如果是教研老师：
+- 主要关注哪个维度？课程设计 / 知识链 / 教学目标 / 课程重点 / 课程难点 / 学习梯度
+- 还是综合型，不侧重特定维度？
 
-### 第4步：生成角色
-收集完以上信息后，告诉用户"正在为你生成角色..."，然后输出 JSON。
+如果是学生：
+- 什么年龄段？小学 / 初中 / 高中
+- 什么学习特点？活泼好动 / 安静内向 / 学霸型 / 努力追赶型
 
-## JSON 输出格式（仅在第4步输出）
+如果是家长：
+- 什么教育理念？重视成绩 / 关注素质 / 比较放手 / 其他
+- 对教育参与度？深度参与 / 一般关注 / 基本信任学校
+
+### 第3步：确认性格和说话风格
+问用户希望这个角色的性格偏好：
+A. 严谨认真型 — 专业严格，一丝不苟
+B. 温和鼓励型 — 善于发现优点，建设性建议
+C. 直言不讳型 — 有问题直接指出，不留情面
+D. 幽默亲和型 — 轻松表达，善用比喻
+E. 让用户自由描述
+
+### 第4步：关注重点
+问用户希望这个角色在评审教研案时特别关注什么？
+比如：教学目标的清晰度 / 知识点的衔接 / 课堂活动设计 / 练习题设计 / 分层教学 / 学生参与度 / 作业设计 / 其他
+
+### 第5步：教学经验和背景
+问用户想给这个角色什么样的教学背景？
+比如：教龄 / 学校类型 / 是否有班主任经验 / 特殊教育经历等
+（如果是学生/家长角色，跳过此步，直接到第6步）
+
+### 第6步：生成角色
+收集完信息后，告诉用户"正在为你生成角色..."，然后输出 JSON。
+
+## JSON 输出格式（仅在第6步输出）
 请严格按以下格式输出（仅输出 JSON，不要其他内容）：
 \`\`\`json
 {
   "name": "角色名称（2-4个字，有个性）",
   "avatar": "一个代表此角色的 emoji",
-  "tagline": "一句话角色标签（XX领域·XX风格）",
-  "color": "从 indigo/violet/pink/orange/teal/sky/slate/green 中选一个",
+  "tagline": "一句话角色标签",
+  "color": "从 indigo/violet/pink/orange/teal/sky/slate/green/rose/amber/emerald/cyan 中选一个",
+  "category": "teacher 或 student 或 parent",
+  "focusDimension": "课程设计/知识链/教学目标/课程重点/课程难点/学习梯度 中的一个（仅教研老师需要）",
   "personality": {
     "directness": 3,
     "strictness": 4,
@@ -58,27 +84,30 @@ D. 幽默风趣型 — 轻松活泼，喜欢用比喻
     "style": "说话风格描述",
     "catchphrase": "口头禅（有性格特色）"
   },
-  "system_prompt": "完整的系统提示词"
+  "system_prompt": "完整的系统提示词，包含角色身份、说话方式、专业背景、评审原则。要明确不评价课件交互逻辑和功能设计，专注于教研内容。"
 }
 \`\`\`
 
 ## 重要规则
 - 每次只问一个问题，不要一次把所有问题都抛出
-- 用轻松友好的语气，像和朋友聊天
-- 给出的选项要用 A/B/C/D 标记，方便用户选择
+- 用轻松友好的语气，像和同事聊天
+- 给出的选项要用 A/B/C/D 标记，方便选择
 - 如果用户说"随机"或"帮我选"，你就随机组合一个
-- 在第4步之前，不要输出任何 JSON`
+- 在最后一步之前，不要输出任何 JSON
+- 角色必须聚焦教研案评审，不评价课件交互和功能设计`
 
-const RANDOM_AGENT_PROMPT = `你是 DocMind 的 Agent 创建助手。请随机生成一个有趣且有个性的文档评审角色。
+const RANDOM_AGENT_PROMPT = `你是教研评审平台的角色创建助手。请随机生成一个有特色的教研案评审角色。
 
-随机组合行业、性格、说话风格，生成一个独特的角色。要有创意，不要太平庸。
+随机选择一种角色类型（教研老师/学生/家长），随机组合性格、说话风格、关注维度，生成一个独特的教育领域评审角色。
 
 请严格按以下 JSON 格式输出（仅输出 JSON，不要其他内容）：
 {
   "name": "角色名称（2-4个字，有个性）",
   "avatar": "一个代表此角色的 emoji",
   "tagline": "一句话角色标签",
-  "color": "从 indigo/violet/pink/orange/teal/sky/slate/green 中随机选一个",
+  "color": "从 indigo/violet/pink/orange/teal/sky/slate/green/rose/amber/emerald/cyan 中随机选一个",
+  "category": "teacher 或 student 或 parent",
+  "focusDimension": "课程设计/知识链/教学目标/课程重点/课程难点/学习梯度 中的一个（仅 teacher 需要，其他留空字符串）",
   "personality": {
     "directness": 随机1-5,
     "strictness": 随机1-5,
@@ -90,13 +119,13 @@ const RANDOM_AGENT_PROMPT = `你是 DocMind 的 Agent 创建助手。请随机�
     "style": "说话风格描述",
     "catchphrase": "有个性的口头禅"
   },
-  "system_prompt": "完整的系统提示词，要包含角色性格和说话方式"
+  "system_prompt": "完整的系统提示词，包含教育角色身份、说话方式和评审原则。明确不评价课件交互逻辑。"
 }`
 
 const INITIAL_MESSAGES: ChatMsg[] = [
   {
     role: 'ai',
-    content: '你好！让我们一起创建一个评审角色吧 🎭\n\n首先，这个角色属于什么行业或领域？\n\nA. 💻 技术 / 开发\nB. 📋 产品 / 运营\nC. 🎨 设计 / 用户体验\nD. 📚 教育 / 学术\nE. ⚖️ 法律 / 合规\nF. 📊 数据 / 分析\nG. 👔 管理 / 战略\n\n输入字母选择，或直接告诉我你想要的领域！',
+    content: '你好！让我们一起创建一个教研评审角色吧 🎭\n\n首先，你想创建什么类型的角色？\n\nA. 👨‍🏫 教研老师视角 — 专业的教学设计审视\nB. 🎒 学生视角 — 模拟学生的学习感受\nC. 👨‍👩‍👧 家长视角 — 家长对教学的关注点\nD. 🎭 自定义视角 — 完全自由设计\n\n输入字母选择，或直接告诉我你想要的角色！',
   },
 ]
 
@@ -124,6 +153,7 @@ export default function AgentCreatePage() {
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState<{
     name: string; avatar: string; tagline: string; color: AgentColor
+    category?: AgentCategory; focusDimension?: string
     personality: { directness: number; strictness: number; humor: number; empathy: number }
     expertise: string[]; behavior: { style: string; catchphrase: string }; system_prompt: string
   } | null>(null)
@@ -142,6 +172,8 @@ export default function AgentCreatePage() {
         avatar: parsed.avatar || '🤖',
         tagline: parsed.tagline || '',
         color: validColor as AgentColor,
+        category: (['teacher', 'student', 'parent'].includes(parsed.category) ? parsed.category : 'teacher') as AgentCategory,
+        focusDimension: parsed.focusDimension || undefined,
         personality: {
           directness: Math.min(5, Math.max(1, parsed.personality?.directness || 3)),
           strictness: Math.min(5, Math.max(1, parsed.personality?.strictness || 3)),
@@ -155,7 +187,7 @@ export default function AgentCreatePage() {
       setPreview(previewData)
       setMessages((prev) => [...prev, {
         role: 'ai',
-        content: `✅ 角色「${previewData.name}」已生成！\n\n请在右侧预览卡片中查看详情。如果满意，点击"保存角色"即可。\n\n不满意？继续告诉我哪里需要调整。`,
+        content: `角色「${previewData.name}」已生成！\n\n请在右侧预览卡片中查看详情。如果满意，点击"保存角色"即可。\n\n不满意？继续告诉我哪里需要调整。`,
       }])
     } else {
       setMessages((prev) => [...prev, { role: 'ai', content: text || '生成失败，请重新描述。' }])
@@ -214,7 +246,7 @@ export default function AgentCreatePage() {
 
     try {
       await chatCompletion(
-        [{ role: 'system', content: RANDOM_AGENT_PROMPT }, { role: 'user', content: '请随机生成一个独特有趣的评审角色' }],
+        [{ role: 'system', content: RANDOM_AGENT_PROMPT }, { role: 'user', content: '请随机生成一个独特有趣的教研评审角色' }],
         {
           onChunk: () => {},
           onDone: (text) => processLLMResponse(text),
@@ -233,7 +265,7 @@ export default function AgentCreatePage() {
   const handleSave = () => {
     if (!preview) return
     const agent: Agent = {
-      id: crypto.randomUUID(),
+      id: createId(),
       owner_id: user?.id || '',
       name: preview.name,
       avatar: preview.avatar,
@@ -246,6 +278,9 @@ export default function AgentCreatePage() {
       is_public: false,
       usage_count: 0,
       color: preview.color,
+      category: preview.category,
+      focusDimension: preview.focusDimension as Agent['focusDimension'],
+      creation_history: messages.map((m) => ({ role: m.role, content: m.content })),
       created_at: new Date().toISOString(),
     }
     addAgent(agent)
@@ -253,18 +288,20 @@ export default function AgentCreatePage() {
     navigate('/agents')
   }
 
+  const categoryLabels: Record<string, string> = { teacher: '教研老师', student: '学生', parent: '家长' }
+
   return (
     <div className="space-y-6 animate-slide-up">
       <Link to="/agents" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
-        <ArrowLeft className="h-4 w-4" /> 返回 Agent 工坊
+        <ArrowLeft className="h-4 w-4" /> 返回教研评审团
       </Link>
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">创建新的评审角色</h1>
+          <h1 className="text-2xl font-bold text-gray-900">创建教研评审角色</h1>
           <p className="text-sm text-gray-500 mt-1">
             {hasValidConfig
-              ? '通过对话引导创建你的专属评审角色'
+              ? '通过对话引导创建教研老师、学生或家长视角的评审角色'
               : '请先到设置页面配置 API Key，然后回来创建角色'}
           </p>
         </div>
@@ -283,7 +320,7 @@ export default function AgentCreatePage() {
         <div className="lg:col-span-3 rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col" style={{ height: '600px' }}>
           <div className="border-b border-gray-100 px-5 py-3">
             <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
-              <Sparkles className="h-4 w-4 text-primary-500" /> 引导式创建
+              <Sparkles className="h-4 w-4 text-primary-500" /> 教育专属引导
             </h3>
           </div>
 
@@ -354,6 +391,19 @@ export default function AgentCreatePage() {
                       <p className="text-xs text-gray-500">{preview.tagline}</p>
                     </div>
                   </div>
+
+                  {preview.category && (
+                    <div className="mb-3">
+                      <span className="inline-block rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary-50 text-primary-600 border border-primary-200">
+                        {categoryLabels[preview.category] || preview.category}
+                      </span>
+                      {preview.focusDimension && (
+                        <span className="inline-block ml-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-600 border border-amber-200">
+                          {preview.focusDimension}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   <div className="space-y-1.5 mb-3">
                     {Object.entries(preview.personality).map(([key, val]) => {

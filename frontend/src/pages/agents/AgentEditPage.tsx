@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Bot, Save } from 'lucide-react'
+import { ArrowLeft, Bot, Save, History, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgentStore, AGENT_COLORS } from '@/stores/agentStore'
 import { toast } from '@/components/ui/Toast'
 import type { AgentColor } from '@/types'
 
-const COLOR_OPTIONS: AgentColor[] = ['indigo', 'violet', 'pink', 'orange', 'teal', 'sky', 'slate', 'green']
+const COLOR_OPTIONS: AgentColor[] = ['indigo', 'violet', 'pink', 'orange', 'teal', 'sky', 'slate', 'green', 'rose', 'amber', 'emerald', 'cyan']
+
+const CATEGORY_LABELS: Record<string, string> = { teacher: '教研老师', student: '学生', parent: '家长' }
 
 export default function AgentEditPage() {
   const { id } = useParams<{ id: string }>()
@@ -24,18 +26,19 @@ export default function AgentEditPage() {
   const [strictness, setStrictness] = useState(agent?.personality.strictness || 3)
   const [humor, setHumor] = useState(agent?.personality.humor || 3)
   const [empathy, setEmpathy] = useState(agent?.personality.empathy || 3)
+  const [showHistory, setShowHistory] = useState(false)
 
   if (!agent) {
     return (
       <div className="space-y-6 animate-slide-up">
         <Link to="/agents" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
-          <ArrowLeft className="h-4 w-4" /> 返回 Agent 工坊
+          <ArrowLeft className="h-4 w-4" /> 返回教研评审团
         </Link>
         <div className="rounded-xl border border-gray-200 bg-white py-16 text-center">
           <Bot className="mx-auto h-12 w-12 text-gray-300 mb-3" />
-          <p className="text-gray-500 font-medium">Agent 不存在或已被删除</p>
+          <p className="text-gray-500 font-medium">角色不存在或已被删除</p>
           <Link to="/agents" className="mt-4 inline-block rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 no-underline">
-            返回 Agent 工坊
+            返回教研评审团
           </Link>
         </div>
       </div>
@@ -63,10 +66,39 @@ export default function AgentEditPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-slide-up">
       <Link to="/agents" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
-        <ArrowLeft className="h-4 w-4" /> 返回 Agent 工坊
+        <ArrowLeft className="h-4 w-4" /> 返回教研评审团
       </Link>
 
-      <h1 className="text-2xl font-bold text-gray-900">编辑 Agent</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">编辑角色</h1>
+        {agent.creation_history && agent.creation_history.length > 0 && (
+          <button
+            onClick={() => setShowHistory(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer bg-white"
+          >
+            <History className="h-4 w-4" /> 设计对话历史
+          </button>
+        )}
+      </div>
+
+      {/* 角色信息概览 */}
+      {(agent.category || agent.focusDimension) && (
+        <div className="flex items-center gap-2">
+          {agent.category && (
+            <span className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-primary-50 text-primary-600 border border-primary-200">
+              {CATEGORY_LABELS[agent.category] || agent.category}
+            </span>
+          )}
+          {agent.focusDimension && (
+            <span className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-600 border border-amber-200">
+              专注: {agent.focusDimension}
+            </span>
+          )}
+          <span className="text-xs text-gray-400">
+            {agent.source === 'template' ? '来自预设模板' : '自定义创建'} · 已使用 {agent.usage_count} 次
+          </span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3 space-y-5">
@@ -195,6 +227,33 @@ export default function AgentEditPage() {
           </button>
         </div>
       </div>
+
+      {/* 设计对话历史 Modal */}
+      {showHistory && agent.creation_history && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowHistory(false)}>
+          <div className="w-full max-w-lg max-h-[80vh] rounded-xl bg-white shadow-xl mx-4 flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900">角色设计对话历史</h3>
+              <button onClick={() => setShowHistory(false)} className="text-gray-400 hover:text-gray-600 bg-transparent border-0 cursor-pointer">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+              {agent.creation_history.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    className={`max-w-[85%] rounded-xl px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
+                      msg.role === 'user' ? 'bg-primary-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-700 rounded-tl-sm'
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

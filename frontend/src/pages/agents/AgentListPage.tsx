@@ -9,10 +9,9 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { AgentTemplate, Agent } from '@/types'
 
 const TEMPLATE_GROUPS: { label: string; icon: string; ids: string[] }[] = [
-  { label: '技术研发', icon: '💻', ids: ['tpl-2', 'tpl-8'] },
-  { label: '产品设计', icon: '🎨', ids: ['tpl-3', 'tpl-4', 'tpl-5'] },
-  { label: '管理决策', icon: '👔', ids: ['tpl-6', 'tpl-1'] },
-  { label: '专业服务', icon: '⚖️', ids: ['tpl-7'] },
+  { label: '教研老师', icon: '📐', ids: ['tpl-edu-1', 'tpl-edu-2', 'tpl-edu-3', 'tpl-edu-4', 'tpl-edu-5', 'tpl-edu-6'] },
+  { label: '学生视角', icon: '🎒', ids: ['tpl-stu-1', 'tpl-stu-2', 'tpl-stu-3'] },
+  { label: '家长视角', icon: '👨‍👩‍👧', ids: ['tpl-par-1', 'tpl-par-2', 'tpl-par-3'] },
 ]
 
 function CompactTemplateCard({ template, onUse, onHide, onClick }: {
@@ -235,7 +234,7 @@ export default function AgentListPage() {
     }
     const agent = createAgentFromTemplate(tpl, user?.id || '')
     addAgent(agent)
-    toast('success', `已添加角色「${tpl.name}」到你的 Agent 列表`)
+    toast('success', `已添加角色「${tpl.name}」到你的评审团`)
   }
 
   const handleDeleteAgent = (agent: Agent) => {
@@ -271,15 +270,15 @@ export default function AgentListPage() {
     <div className="space-y-6 animate-slide-up">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Agent 工坊</h1>
-          <p className="text-sm text-gray-500 mt-1">创建和管理你的 AI 评审角色</p>
+          <h1 className="text-2xl font-bold text-gray-900">教研评审团</h1>
+          <p className="text-sm text-gray-500 mt-1">创建和管理你的教研评审角色</p>
         </div>
         <Link
           to="/agents/create"
           className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors no-underline"
         >
           <Plus className="h-4 w-4" />
-          创建 Agent
+          创建角色
         </Link>
       </div>
 
@@ -287,7 +286,7 @@ export default function AgentListPage() {
         <div className="flex rounded-lg border border-gray-200 bg-white p-0.5">
           {[
             { key: 'templates' as const, label: '预设模板', icon: Sparkles },
-            { key: 'my' as const, label: `我的 Agent (${agents.length})`, icon: Bot },
+            { key: 'my' as const, label: `我的角色 (${agents.length})`, icon: Bot },
             { key: 'trash' as const, label: `回收站${trashCount > 0 ? ` (${trashCount})` : ''}`, icon: Recycle },
           ].map((tab) => {
             const TabIcon = tab.icon
@@ -362,7 +361,7 @@ export default function AgentListPage() {
         filteredAgents.length === 0 ? (
           <div className="rounded-xl border border-gray-200 bg-white py-16 text-center">
             <Bot className="mx-auto h-12 w-12 text-gray-300 mb-3" />
-            <p className="text-gray-500 font-medium">还没有自定义 Agent</p>
+            <p className="text-gray-500 font-medium">还没有自定义角色</p>
             <p className="text-sm text-gray-400 mt-1">从预设模板添加或对话式创建你的第一个评审角色</p>
             <div className="mt-4 flex justify-center gap-3">
               <button
@@ -394,13 +393,13 @@ export default function AgentListPage() {
             <div className="rounded-xl border border-gray-200 bg-white py-16 text-center">
               <Recycle className="mx-auto h-12 w-12 text-gray-300 mb-3" />
               <p className="text-gray-500 font-medium">回收站是空的</p>
-              <p className="text-sm text-gray-400 mt-1">删除的 Agent 和隐藏的模板会出现在这里</p>
+              <p className="text-sm text-gray-400 mt-1">删除的角色和隐藏的模板会出现在这里</p>
             </div>
           ) : (
             <>
               {trashedAgents.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-3">已删除的 Agent ({trashedAgents.length})</h3>
+                  <h3 className="text-sm font-medium text-gray-500 mb-3">已删除的角色 ({trashedAgents.length})</h3>
                   <div className="space-y-2">
                     {trashedAgents.map((agent) => {
                       const borderColor = AGENT_COLORS[agent.color]

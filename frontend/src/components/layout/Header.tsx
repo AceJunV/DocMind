@@ -23,10 +23,10 @@ import { CommandPalette } from '@/components/ui/CommandPalette'
 
 const NAV_ITEMS = [
   { path: '/dashboard', label: '工作台', icon: LayoutDashboard },
-  { path: '/documents', label: '文档中心', icon: FileText },
-  { path: '/agents', label: 'Agent 工坊', icon: Bot },
+  { path: '/documents', label: '教研案', icon: FileText },
+  { path: '/agents', label: '评审团', icon: Bot },
   { path: '/reviews', label: '评审大厅', icon: ClipboardCheck },
-  { path: '/chat', label: '聊天室', icon: MessageCircle },
+  { path: '/chat', label: '教研研讨', icon: MessageCircle },
 ]
 
 export function Header() {
@@ -163,7 +163,7 @@ export function Header() {
                 </button>
                 <button
                   onClick={() => {
-                    if (confirm('确定要清除所有本地数据吗？这将清空文档、Agent、评审记录等。')) {
+                    if (confirm('确定要清除所有本地数据吗？这将清空教研案、评审角色、评审记录等。')) {
                       localStorage.clear()
                       window.location.reload()
                     }
