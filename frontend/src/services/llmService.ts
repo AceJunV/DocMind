@@ -1,13 +1,18 @@
 import { useSettingsStore, resolveModelConfig, isModelConfigValid } from '@/stores/settingsStore'
 
 export class LLMError extends Error {
+  code: 'no_config' | 'invalid_config' | 'network' | 'api_error' | 'parse_error' | 'aborted'
+  status?: number
+
   constructor(
     message: string,
-    public code: 'no_config' | 'invalid_config' | 'network' | 'api_error' | 'parse_error' | 'aborted',
-    public status?: number
+    code: 'no_config' | 'invalid_config' | 'network' | 'api_error' | 'parse_error' | 'aborted',
+    status?: number
   ) {
     super(message)
     this.name = 'LLMError'
+    this.code = code
+    this.status = status
   }
 }
 
