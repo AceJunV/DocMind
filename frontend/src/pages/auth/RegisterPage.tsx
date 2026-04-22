@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { Eye, EyeOff, UserPlus } from 'lucide-react'
+import { createId } from '@/utils/id'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
@@ -36,7 +37,7 @@ export default function RegisterPage() {
       await new Promise((r) => setTimeout(r, 800))
       login(
         {
-          id: crypto.randomUUID(),
+          id: createId(),
           email,
           name,
           created_at: new Date().toISOString(),

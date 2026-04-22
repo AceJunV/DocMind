@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useAgentStore } from '@/stores/agentStore'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { createId } from '@/utils/id'
 import type { ChatRoom } from '@/types'
 
 function formatTimeAgo(dateStr: string): string {
@@ -56,7 +57,7 @@ export default function ChatListPage() {
 
     const participants = review.agents || []
     const room: ChatRoom = {
-      id: crypto.randomUUID(),
+      id: createId(),
       document_id: review.document_id,
       review_id: reviewId,
       owner_id: user?.id || '',
@@ -67,7 +68,7 @@ export default function ChatListPage() {
     }
     createRoom(room)
     addMessage(room.id, {
-      id: crypto.randomUUID(),
+      id: createId(),
       room_id: room.id,
       sender_type: 'agent',
       sender_id: 'system',
@@ -115,7 +116,7 @@ export default function ChatListPage() {
     const participants = agents.filter((a) => selectedAgentIds.includes(a.id))
     const topic = newTopic.trim() || '自由讨论'
     const room: ChatRoom = {
-      id: crypto.randomUUID(),
+      id: createId(),
       document_id: '',
       owner_id: user?.id || '',
       topic,
@@ -125,7 +126,7 @@ export default function ChatListPage() {
     }
     createRoom(room)
     addMessage(room.id, {
-      id: crypto.randomUUID(),
+      id: createId(),
       room_id: room.id,
       sender_type: 'agent',
       sender_id: 'system',

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { Eye, EyeOff, LogIn } from 'lucide-react'
+import { createId } from '@/utils/id'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -27,7 +28,7 @@ export default function LoginPage() {
       await new Promise((r) => setTimeout(r, 800))
       login(
         {
-          id: crypto.randomUUID(),
+          id: createId(),
           email,
           name: email.split('@')[0],
           created_at: new Date().toISOString(),

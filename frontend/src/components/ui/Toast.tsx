@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { X, CheckCircle, AlertCircle, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { createId } from '@/utils/id'
 
 interface ToastItem {
   id: string
@@ -25,7 +26,7 @@ export function ToastContainer() {
   const [toasts, setToasts] = useState<ToastItem[]>([])
 
   const add = useCallback((t: Omit<ToastItem, 'id'>) => {
-    const id = crypto.randomUUID()
+    const id = createId()
     setToasts((prev) => [...prev, { ...t, id }])
     setTimeout(() => setToasts((prev) => prev.filter((x) => x.id !== id)), 4000)
   }, [])

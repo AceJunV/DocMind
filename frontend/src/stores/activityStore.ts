@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { createId } from '@/utils/id'
 
 export interface Activity {
   id: string
@@ -23,7 +24,7 @@ export const useActivityStore = create<ActivityState>()(
       addActivity: (activity) => {
         const entry: Activity = {
           ...activity,
-          id: crypto.randomUUID(),
+          id: createId(),
           created_at: new Date().toISOString(),
         }
         set((state) => ({

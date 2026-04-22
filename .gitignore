@@ -33,3 +33,9 @@ Thumbs.db
 
 # Cursor
 .cursor/plans/
+
+# Deploy scripts (contain credentials)
+deploy*.py
+
+# Vercel
+.vercel/

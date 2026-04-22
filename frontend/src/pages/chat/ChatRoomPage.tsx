@@ -9,6 +9,7 @@ import { chatCompletion, LLMError } from '@/services/llmService'
 import { isModelConfigValid, useSettingsStore } from '@/stores/settingsStore'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { createId } from '@/utils/id'
 import type { ChatMessage, Agent } from '@/types'
 
 const EMPTY_MESSAGES: ChatMessage[] = []
@@ -98,7 +99,7 @@ export default function ChatRoomPage() {
   const addAgentMsg = useCallback((agent: Agent, content: string) => {
     if (!id) return
     addMessage(id, {
-      id: crypto.randomUUID(),
+      id: createId(),
       room_id: id,
       sender_type: 'agent',
       sender_id: agent.id,
@@ -197,7 +198,7 @@ export default function ChatRoomPage() {
     const { targetAgent, cleanText } = parseTargetAgent(text)
 
     const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: createId(),
       room_id: id,
       sender_type: 'user',
       sender_id: user?.id || '',
@@ -210,7 +211,7 @@ export default function ChatRoomPage() {
 
     if (!hasValidConfig) {
       addMessage(id, {
-        id: crypto.randomUUID(), room_id: id, sender_type: 'agent',
+        id: createId(), room_id: id, sender_type: 'agent',
         sender_id: 'system', sender_name: '系统',
         content: '请先到设置页面配置 API Key 才能与 Agent 对话。',
         created_at: new Date().toISOString(),
@@ -283,7 +284,7 @@ export default function ChatRoomPage() {
     toast('success', `已邀请「${agent.name}」加入聊天室`)
 
     addMessage(id, {
-      id: crypto.randomUUID(), room_id: id, sender_type: 'agent',
+      id: createId(), room_id: id, sender_type: 'agent',
       sender_id: 'system', sender_name: '系统',
       content: `${agent.avatar || ''} ${agent.name} 加入了聊天室`,
       created_at: new Date().toISOString(),

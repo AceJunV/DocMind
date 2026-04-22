@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { isModelConfigValid, useSettingsStore } from '@/stores/settingsStore'
 import { executeAgentReview, generateSummary } from '@/services/reviewEngine'
 import { toast } from '@/components/ui/Toast'
+import { createId } from '@/utils/id'
 import type { Agent, AgentReview, Review } from '@/types'
 
 export default function ReviewCreatePage() {
@@ -53,7 +54,7 @@ export default function ReviewCreatePage() {
     abortRef.current = new AbortController()
 
     const review: Review = {
-      id: crypto.randomUUID(),
+      id: createId(),
       document_id: selectedDocId,
       owner_id: user?.id || '',
       status: 'in_progress',

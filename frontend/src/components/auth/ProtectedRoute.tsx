@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
+import { createId } from '@/utils/id'
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, login } = useAuthStore()
@@ -8,7 +9,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     if (!isAuthenticated) {
       login(
         {
-          id: crypto.randomUUID(),
+          id: createId(),
           email: 'user@docmind.local',
           name: '体验用户',
           created_at: new Date().toISOString(),

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ModelConfig, SavedModelProfile, ProviderMode } from '@/types'
+import { createId } from '@/utils/id'
 
 const DEFAULT_CONFIG: ModelConfig = {
   providerMode: 'official',
@@ -74,7 +75,7 @@ export const useSettingsStore = create<SettingsState>()(
 
       addProfile: (name, config) => {
         const profile: SavedModelProfile = {
-          id: crypto.randomUUID(),
+          id: createId(),
           name,
           config: resolveModelConfig(config),
           savedAt: new Date().toISOString(),
