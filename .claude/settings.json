@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs wc *)",
+      "Bash(npm audit *)",
+      "WebSearch",
+      "Read(//c/Users/rex_y/Desktop//**)",
+      "Read(//c/Windows/Fonts/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\rex_y\\Desktop"
+    ]
+  }
+}

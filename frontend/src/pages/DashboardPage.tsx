@@ -12,28 +12,17 @@ import {
   Upload, Plus, ArrowRight, Clock,
   Trophy, Star,
 } from 'lucide-react'
+import { formatTimeAgo } from '@/utils/format'
 
 const QUICK_ACTIONS = [
   { icon: Upload, label: '上传教研案', desc: '支持 PDF / Word / MD / TXT 格式', path: '/documents', color: 'bg-blue-50 text-blue-600', hoverBg: 'group-hover:bg-blue-100' },
   { icon: Plus, label: '创建角色', desc: '从模板、自定义或 AI 对话创建评审角色', path: '/agents', color: 'bg-purple-50 text-purple-600', hoverBg: 'group-hover:bg-purple-100' },
-  { icon: ClipboardCheck, label: '发起评审', desc: '多角色并行评审教研案', path: '/reviews', color: 'bg-emerald-50 text-emerald-600', hoverBg: 'group-hover:bg-emerald-100' },
+  { icon: ClipboardCheck, label: '发起评审', desc: '多角色并行评审教研案', path: '/reviews/create', color: 'bg-emerald-50 text-emerald-600', hoverBg: 'group-hover:bg-emerald-100' },
   { icon: MessageCircle, label: '教研研讨', desc: '与评审团深度讨论教研案', path: '/chat', color: 'bg-orange-50 text-orange-600', hoverBg: 'group-hover:bg-orange-100' },
 ]
 
 const TYPE_DOT: Record<Activity['type'], string> = {
   review: 'bg-emerald-500', upload: 'bg-blue-500', agent: 'bg-purple-500', chat: 'bg-orange-500',
-}
-
-function formatTimeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes} 分钟前`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} 小时前`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days} 天前`
-  return new Date(dateStr).toLocaleDateString('zh-CN')
 }
 
 export default function DashboardPage() {
@@ -131,7 +120,7 @@ export default function DashboardPage() {
               {agentRanking.map((agent, i) => {
                 const borderColor = AGENT_COLORS[agent.color]
                 return (
-                  <div key={agent.id} className="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors">
+                  <Link key={agent.id} to="/agents" className="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors no-underline">
                     <span className={cn(
                       'text-xs font-bold w-5 text-center',
                       i === 0 ? 'text-amber-500' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-amber-700' : 'text-gray-300'
@@ -151,7 +140,7 @@ export default function DashboardPage() {
                       <Star className="h-3 w-3 text-amber-400" />
                       <span>{agent.usage_count} 次</span>
                     </div>
-                  </div>
+                  </Link>
                 )
               })}
             </div>
@@ -173,7 +162,7 @@ export default function DashboardPage() {
           ) : (
             <div className="divide-y divide-gray-50">
               {recentReviews.map((review) => (
-                <div key={review.id} className="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors">
+                <Link key={review.id} to={`/reviews/${review.id}`} className="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors no-underline">
                   <div className="rounded-md bg-emerald-50 p-1.5 shrink-0">
                     <ClipboardCheck className="h-3.5 w-3.5 text-emerald-600" />
                   </div>
@@ -196,7 +185,7 @@ export default function DashboardPage() {
                     </div>
                   )}
                   <span className="text-[10px] text-gray-400 shrink-0">{formatTimeAgo(review.created_at)}</span>
-                </div>
+                </Link>
               ))}
             </div>
           )}

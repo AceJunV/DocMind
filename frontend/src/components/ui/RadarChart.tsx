@@ -69,13 +69,13 @@ export function RadarChart({ datasets, size = 280 }: RadarChartProps) {
             key={i}
             points={points}
             fill="none"
-            stroke="#e5e7eb"
+            className="stroke-gray-200 dark:stroke-gray-600"
             strokeWidth={i === gridLevels.length - 1 ? 1.5 : 0.5}
           />
         ))}
 
         {axisLines.map((line, i) => (
-          <line key={i} {...line} stroke="#d1d5db" strokeWidth={0.5} />
+          <line key={i} {...line} className="stroke-gray-300 dark:stroke-gray-600" strokeWidth={0.5} />
         ))}
 
         {dataPolygons.map((dp, i) => (
@@ -109,7 +109,7 @@ export function RadarChart({ datasets, size = 280 }: RadarChartProps) {
             y={lp.y}
             textAnchor="middle"
             dominantBaseline="central"
-            className="text-[11px] fill-gray-600 font-medium"
+            className="text-[11px] fill-gray-600 dark:fill-gray-300 font-medium"
           >
             {lp.label}
           </text>
@@ -119,7 +119,7 @@ export function RadarChart({ datasets, size = 280 }: RadarChartProps) {
       {datasets.length > 1 && (
         <div className="flex flex-wrap gap-3 mt-2 justify-center">
           {datasets.map((ds, i) => (
-            <div key={i} className="flex items-center gap-1.5 text-xs text-gray-600">
+            <div key={i} className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
               <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: AGENT_COLORS[ds.color] }} />
               {ds.label}
             </div>

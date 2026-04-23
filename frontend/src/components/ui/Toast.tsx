@@ -18,9 +18,9 @@ export function toast(type: ToastItem['type'], message: string) {
 
 const ICONS = { success: CheckCircle, error: AlertCircle, info: Info }
 const STYLES = {
-  success: 'bg-emerald-50 border-emerald-200 text-emerald-800',
-  error: 'bg-red-50 border-red-200 text-red-800',
-  info: 'bg-blue-50 border-blue-200 text-blue-800',
+  success: 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/40 dark:border-emerald-700 dark:text-emerald-300',
+  error: 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/40 dark:border-red-700 dark:text-red-300',
+  info: 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-300',
 }
 
 export function ToastContainer() {

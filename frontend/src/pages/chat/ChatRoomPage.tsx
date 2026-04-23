@@ -47,6 +47,7 @@ export default function ChatRoomPage() {
   const [showDoc, setShowDoc] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -213,7 +214,7 @@ export default function ChatRoomPage() {
       addMessage(id, {
         id: createId(), room_id: id, sender_type: 'agent',
         sender_id: 'system', sender_name: '系统',
-        content: '请先到设置页面配置 API Key 才能与 Agent 对话。',
+        content: '请先到设置页面配置 API Key 才能与角色对话。',
         created_at: new Date().toISOString(),
       })
       return
@@ -326,11 +327,11 @@ export default function ChatRoomPage() {
             onClick={() => setShowInvite(true)}
             className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 cursor-pointer bg-white"
           >
-            <UserPlus className="h-3.5 w-3.5" /> 邀请 Agent
+            <UserPlus className="h-3.5 w-3.5" /> 邀请角色
           </button>
           {room.status === 'active' && (
             <button
-              onClick={() => { closeRoom(id!); toast('info', '聊天室已关闭') }}
+              onClick={() => setConfirmClose(true)}
               className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 cursor-pointer bg-white"
             >
               关闭聊天室
@@ -351,6 +352,14 @@ export default function ChatRoomPage() {
             onConfirm={() => { removeRoom(id!); navigate('/chat'); toast('success', '聊天室已删除') }}
             onCancel={() => setConfirmDelete(false)}
           />
+          <ConfirmDialog
+            open={confirmClose}
+            title="关闭聊天室"
+            description="关闭后角色将不再回复消息，但历史记录会保留。确定要关闭吗？"
+            confirmText="关闭"
+            onConfirm={() => { closeRoom(id!); setConfirmClose(false); toast('info', '聊天室已关闭') }}
+            onCancel={() => setConfirmClose(false)}
+          />
         </div>
       </div>
 
@@ -358,13 +367,13 @@ export default function ChatRoomPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowInvite(false)}>
           <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">邀请 Agent</h3>
+              <h3 className="text-lg font-semibold text-gray-900">邀请角色</h3>
               <button onClick={() => setShowInvite(false)} className="text-gray-400 hover:text-gray-600 bg-transparent border-0 cursor-pointer">
                 <X className="h-5 w-5" />
               </button>
             </div>
             {availableToInvite.length === 0 ? (
-              <p className="text-sm text-gray-500 py-4 text-center">没有更多可邀请的 Agent</p>
+              <p className="text-sm text-gray-500 py-4 text-center">没有更多可邀请的角色</p>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {availableToInvite.map((agent) => (
@@ -428,7 +437,7 @@ export default function ChatRoomPage() {
           <div className="border-b border-gray-100 px-5 py-3 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-gray-900">{room.topic}</h3>
-              <p className="text-xs text-gray-500">{messages.length} 条消息 · {participants.length} 位 Agent</p>
+              <p className="text-xs text-gray-500">{messages.length} 条消息 · {participants.length} 位角色</p>
             </div>
             <button
               onClick={() => setShowDoc(!showDoc)}

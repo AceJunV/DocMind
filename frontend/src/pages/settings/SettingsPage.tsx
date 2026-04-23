@@ -28,6 +28,7 @@ import {
 } from '@/stores/settingsStore'
 import { testConnection } from '@/services/llmService'
 import { toast as globalToast } from '@/components/ui/Toast'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { ModelConfig, ProviderMode, SavedModelProfile } from '@/types'
 
 type FormValues = ModelConfig & { profileName: string }
@@ -90,6 +91,8 @@ export default function SettingsPage() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<SavedModelProfile | null>(null)
+  const [clearDataConfirm, setClearDataConfirm] = useState(false)
 
   const modelInfo = useMemo(() => {
     const trimmed = form.model.toLowerCase().trim()
@@ -302,7 +305,7 @@ export default function SettingsPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            if (confirm(`确认删除配置"${profile.name}"？`)) handleDelete(profile)
+                            setDeleteTarget(profile)
                           }}
                           className="ml-2 text-gray-300 hover:text-red-500 bg-transparent border-0 cursor-pointer shrink-0 transition-colors"
                         >
@@ -610,19 +613,39 @@ export default function SettingsPage() {
             <Download className="h-4 w-4" /> 导出数据 (JSON)
           </button>
           <button
-            onClick={() => {
-              if (!confirm('确定要清除所有本地数据吗？此操作不可撤销。')) return
-              const keys = ['docmind-documents', 'docmind-reviews', 'docmind-chat', 'docmind-activities']
-              for (const key of keys) localStorage.removeItem(key)
-              globalToast('success', '文档、评审、聊天数据已清除（API 配置和 Agent 已保留）')
-              setTimeout(() => window.location.reload(), 1000)
-            }}
+            onClick={() => setClearDataConfirm(true)}
             className="flex items-center gap-1.5 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 cursor-pointer bg-white transition-colors"
           >
             <AlertTriangle className="h-4 w-4" /> 清除数据（保留配置）
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="确认删除配置"
+        description={deleteTarget ? `确定要删除配置"${deleteTarget.name}"吗？此操作不可撤销。` : ''}
+        confirmText="删除"
+        variant="danger"
+        onConfirm={() => { if (deleteTarget) handleDelete(deleteTarget); setDeleteTarget(null) }}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={clearDataConfirm}
+        title="清除数据"
+        description="确定要清除所有本地数据吗？此操作不可撤销。API 配置和角色将保留。"
+        confirmText="确认清除"
+        variant="danger"
+        onConfirm={() => {
+          const keys = ['docmind-documents', 'docmind-reviews', 'docmind-chat', 'docmind-activities']
+          for (const key of keys) localStorage.removeItem(key)
+          globalToast('success', '文档、评审、聊天数据已清除（API 配置和 Agent 已保留）')
+          setClearDataConfirm(false)
+          setTimeout(() => window.location.reload(), 1000)
+        }}
+        onCancel={() => setClearDataConfirm(false)}
+      />
 
       {/* Help Modal */}
       {helpOpen && (

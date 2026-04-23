@@ -44,7 +44,7 @@ export function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onCancel}>
       <div
-        className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl animate-slide-up mx-4"
+        className="w-full max-w-sm rounded-xl bg-white dark:bg-gray-800 p-6 shadow-xl animate-slide-up mx-4"
         onClick={(e) => e.stopPropagation()}
         role="alertdialog"
         aria-modal="true"
@@ -58,8 +58,8 @@ export function ConfirmDialog({
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <h3 id="confirm-title" className="text-base font-semibold text-gray-900">{title}</h3>
-            <p id="confirm-desc" className="text-sm text-gray-500 mt-1">{description}</p>
+            <h3 id="confirm-title" className="text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+            <p id="confirm-desc" className="text-sm text-gray-500 dark:text-gray-400 mt-1">{description}</p>
           </div>
           <button
             onClick={onCancel}

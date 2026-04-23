@@ -18,7 +18,7 @@ interface CommandItem {
 const STATIC_COMMANDS: CommandItem[] = [
   { id: 'nav-dashboard', label: '工作台', icon: LayoutDashboard, path: '/dashboard', category: '导航' },
   { id: 'nav-documents', label: '文档中心', icon: FileText, path: '/documents', category: '导航' },
-  { id: 'nav-agents', label: 'Agent 工坊', icon: Bot, path: '/agents', category: '导航' },
+  { id: 'nav-agents', label: '角色工坊', icon: Bot, path: '/agents', category: '导航' },
   { id: 'nav-reviews', label: '评审大厅', icon: ClipboardCheck, path: '/reviews', category: '导航' },
   { id: 'nav-chat', label: '聊天室', icon: MessageCircle, path: '/chat', category: '导航' },
   { id: 'nav-settings', label: '设置', icon: Settings, path: '/settings', category: '导航' },
@@ -45,7 +45,7 @@ export function CommandPalette({ open, onClose }: Props) {
     }))
     const agentItems: CommandItem[] = agents.map((a) => ({
       id: `agent-${a.id}`, label: a.name, description: a.tagline,
-      icon: Bot, path: `/agents/${a.id}/edit`, category: 'Agent',
+      icon: Bot, path: `/agents/${a.id}/edit`, category: '角色',
     }))
     const reviewItems: CommandItem[] = reviews.filter((r) => r.status === 'completed').slice(0, 5).map((r) => ({
       id: `review-${r.id}`, label: `${r.document?.title || '未知文档'} 评审报告`,
@@ -131,7 +131,7 @@ export function CommandPalette({ open, onClose }: Props) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索文档、Agent、页面..."
+            placeholder="搜索文档、角色、页面..."
             className="flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
           />
           <kbd className="hidden sm:inline-flex items-center rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-400">ESC</kbd>

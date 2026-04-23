@@ -10,17 +10,8 @@ import { useAgentStore } from '@/stores/agentStore'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { createId } from '@/utils/id'
+import { formatTimeAgo } from '@/utils/format'
 import type { ChatRoom } from '@/types'
-
-function formatTimeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const hours = Math.floor(diff / 3600000)
-  if (hours < 1) return '刚刚'
-  if (hours < 24) return `${hours} 小时前`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days} 天前`
-  return new Date(dateStr).toLocaleDateString('zh-CN')
-}
 
 export default function ChatListPage() {
   const navigate = useNavigate()
@@ -73,7 +64,7 @@ export default function ChatListPage() {
       sender_type: 'agent',
       sender_id: 'system',
       sender_name: '系统',
-      content: `讨论群已建好，${participants.map((a) => `${a.avatar || ''} ${a.name}`).join('、')} 已加入。\nAgent 们正在阅读文档，稍后会自动发起讨论。你也可以随时 @某人 提问。`,
+      content: `讨论群已建好，${participants.map((a) => `${a.avatar || ''} ${a.name}`).join('、')} 已加入。\n角色们正在阅读文档，稍后会自动发起讨论。你也可以随时 @某人 提问。`,
       created_at: new Date().toISOString(),
     })
     navigate(`/chat/${room.id}`, { replace: true })
@@ -94,7 +85,7 @@ export default function ChatListPage() {
 
   const openCreateModal = () => {
     if (agents.length === 0) {
-      toast('info', '请先添加 Agent 才能创建聊天室')
+      toast('info', '请先添加角色才能创建聊天室')
       return
     }
     setNewTopic('')
@@ -110,7 +101,7 @@ export default function ChatListPage() {
 
   const handleCreateRoom = () => {
     if (selectedAgentIds.length === 0) {
-      toast('info', '请至少选择一个 Agent')
+      toast('info', '请至少选择一个角色')
       return
     }
     const participants = agents.filter((a) => selectedAgentIds.includes(a.id))
@@ -156,7 +147,7 @@ export default function ChatListPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">聊天室</h1>
-          <p className="text-sm text-gray-500 mt-1">与 AI Agent 深度辩论，碰撞出更好的想法</p>
+          <p className="text-sm text-gray-500 mt-1">与 AI 角色深度辩论，碰撞出更好的想法</p>
         </div>
         <button
           onClick={openCreateModal}
@@ -192,7 +183,7 @@ export default function ChatListPage() {
           <p className="text-gray-500 font-medium">
             {rooms.length === 0 ? '还没有聊天室' : '没有匹配的聊天室'}
           </p>
-          <p className="text-sm text-gray-400 mt-1">完成评审后可以创建聊天室与 Agent 深入讨论</p>
+          <p className="text-sm text-gray-400 mt-1">完成评审后可以创建聊天室与角色深入讨论</p>
           <div className="mt-4 flex justify-center gap-3">
             <Link to="/reviews" className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 no-underline">
               查看评审
@@ -340,7 +331,7 @@ export default function ChatListPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  选择参与的 Agent ({selectedAgentIds.length}/{agents.length})
+                  选择参与的角色 ({selectedAgentIds.length}/{agents.length})
                 </label>
                 <div className="max-h-52 overflow-y-auto space-y-1.5 rounded-lg border border-gray-200 p-2">
                   {agents.map((agent) => {
@@ -384,7 +375,7 @@ export default function ChatListPage() {
                 disabled={selectedAgentIds.length === 0}
                 className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer border-0"
               >
-                创建 ({selectedAgentIds.length} 位 Agent)
+                创建 ({selectedAgentIds.length} 位角色)
               </button>
             </div>
           </div>

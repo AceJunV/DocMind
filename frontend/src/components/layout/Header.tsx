@@ -15,11 +15,13 @@ import {
   X,
   Moon,
   Sun,
+  Monitor,
   Search,
 } from 'lucide-react'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { CommandPalette } from '@/components/ui/CommandPalette'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 const NAV_ITEMS = [
   { path: '/dashboard', label: '工作台', icon: LayoutDashboard },
@@ -37,6 +39,7 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [clearDataConfirm, setClearDataConfirm] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const prevPathnameRef = useRef(location.pathname)
 
@@ -48,9 +51,12 @@ export function Header() {
   const openSearch = useCallback(() => setSearchOpen(true), [])
   const closeSearch = useCallback(() => setSearchOpen(false), [])
 
-  const toggleDarkMode = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark')
+  const cycleTheme = () => {
+    const next = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light'
+    setTheme(next)
   }
+  const themeLabel = theme === 'light' ? '亮色模式' : theme === 'dark' ? '暗色模式' : '跟随系统'
+  const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -131,11 +137,12 @@ export function Header() {
               <Search className="h-4 w-4" />
             </button>
             <button
-              onClick={toggleDarkMode}
+              onClick={cycleTheme}
               className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors cursor-pointer"
-              aria-label={theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
+              aria-label={themeLabel}
+              title={themeLabel}
             >
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              <ThemeIcon className="h-4 w-4" />
             </button>
 
           <div className="relative" ref={menuRef}>
@@ -165,16 +172,13 @@ export function Header() {
                 </button>
                 <button
                   onClick={() => {
-                    if (confirm('确定要清除所有本地数据吗？这将清空教研案、评审角色、评审记录等。')) {
-                      localStorage.clear()
-                      window.location.reload()
-                    }
+                    setClearDataConfirm(true)
                     setMenuOpen(false)
                   }}
                   className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer border-0 bg-transparent"
                 >
                   <Trash2 className="h-4 w-4" />
-                  清除数据
+                  重置所有数据
                 </button>
               </div>
             )}
@@ -238,6 +242,19 @@ export function Header() {
       )}
 
       <CommandPalette open={searchOpen} onClose={closeSearch} />
+
+      <ConfirmDialog
+        open={clearDataConfirm}
+        title="重置所有本地数据"
+        description="这将清空教研案、评审角色、评审记录以及 API 配置等所有本地数据，此操作不可撤销。"
+        confirmText="确认重置"
+        variant="danger"
+        onConfirm={() => {
+          localStorage.clear()
+          window.location.reload()
+        }}
+        onCancel={() => setClearDataConfirm(false)}
+      />
     </>
   )
 }

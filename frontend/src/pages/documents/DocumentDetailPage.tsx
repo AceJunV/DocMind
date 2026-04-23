@@ -5,21 +5,12 @@ import { useDocumentStore } from '@/stores/documentStore'
 import { useReviewStore } from '@/stores/reviewStore'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { formatTimeAgo } from '@/utils/format'
 
 const FILE_ICON_MAP: Record<string, typeof FileText> = { pdf: FileText, docx: File, md: FileCode, txt: File }
 const FILE_COLOR_MAP: Record<string, string> = {
   pdf: 'bg-red-50 text-red-500', docx: 'bg-blue-50 text-blue-500',
   md: 'bg-gray-100 text-gray-600', txt: 'bg-gray-50 text-gray-500',
-}
-
-function formatTimeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const hours = Math.floor(diff / 3600000)
-  if (hours < 1) return '刚刚'
-  if (hours < 24) return `${hours} 小时前`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days} 天前`
-  return new Date(dateStr).toLocaleDateString('zh-CN')
 }
 
 export default function DocumentDetailPage() {
@@ -100,7 +91,7 @@ export default function DocumentDetailPage() {
                   <ClipboardCheck className="h-5 w-5" />
                   <div>
                     <p className="font-medium">发起评审</p>
-                    <p className="text-xs text-primary-500">选择 Agent 开始多角色评审</p>
+                    <p className="text-xs text-primary-500">选择角色开始多角色评审</p>
                   </div>
                 </Link>
               )}

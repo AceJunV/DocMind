@@ -4,16 +4,7 @@ import { ClipboardCheck, Clock, ArrowRight, FileText, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AGENT_COLORS } from '@/stores/agentStore'
 import { useReviewStore } from '@/stores/reviewStore'
-
-function formatTimeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const hours = Math.floor(diff / 3600000)
-  if (hours < 1) return '刚刚'
-  if (hours < 24) return `${hours} 小时前`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days} 天前`
-  return new Date(dateStr).toLocaleDateString('zh-CN')
-}
+import { formatTimeAgo } from '@/utils/format'
 
 export default function ReviewListPage() {
   const reviews = useReviewStore((s) => s.reviews)
@@ -108,7 +99,7 @@ export default function ReviewListPage() {
                   <div className="text-right">
                     <div className="text-3xl font-bold text-gray-900">{review.overall_score.toFixed(1)}</div>
                     <div className="text-yellow-500 text-sm">
-                      {'★'.repeat(Math.round(review.overall_score))}{'☆'.repeat(5 - Math.round(review.overall_score))}
+                      {'★'.repeat(Math.max(1, Math.round(review.overall_score)))}{'☆'.repeat(5 - Math.max(1, Math.round(review.overall_score)))}
                     </div>
                   </div>
                 )}

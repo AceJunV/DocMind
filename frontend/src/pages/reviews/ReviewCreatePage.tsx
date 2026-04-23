@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Check, CheckCircle2, FileText, Loader2, Play } from 'lucide-react'
+import { ArrowLeft, Check, CheckCircle2, FileText, Loader2, Play, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDocumentStore } from '@/stores/documentStore'
 import { AGENT_COLORS, useAgentStore } from '@/stores/agentStore'
@@ -110,7 +110,7 @@ export default function ReviewCreatePage() {
       }
 
       if (previous.length >= 5) {
-        toast('info', '最多选择 5 个 Agent')
+        toast('info', '最多选择 5 个角色')
         return previous
       }
 
@@ -273,8 +273,23 @@ export default function ReviewCreatePage() {
   if (phase === 'running') {
     return (
       <div className="space-y-6 animate-slide-up">
-        <h1 className="text-2xl font-bold text-gray-900">评审进行中...</h1>
-        <p className="text-sm text-gray-500">正在对《{selectedDoc?.title}》进行多角色评审</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">评审进行中...</h1>
+            <p className="text-sm text-gray-500">正在对《{selectedDoc?.title}》进行多角色评审</p>
+          </div>
+          <button
+            onClick={() => {
+              abortRef.current?.abort()
+              Object.values(dimTimersRef.current).forEach((t) => clearInterval(t))
+              toast('info', '评审已取消，已完成的结果将保留')
+            }}
+            className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+          >
+            <XCircle className="h-4 w-4" />
+            取消评审
+          </button>
+        </div>
 
         <div className="space-y-4">
           {selectedAgents.map((agent) => {
@@ -309,7 +324,7 @@ export default function ReviewCreatePage() {
                     <p className="text-xs text-gray-500">{agent.tagline}</p>
                   </div>
                   {isPending && (
-                    <span className="text-xs text-gray-400 bg-gray-50 rounded-full px-2.5 py-1">等待中</span>
+                    <span className="text-xs text-gray-400 bg-gray-50 rounded-full px-2.5 py-1">准备中...</span>
                   )}
                   {isReviewing && <Loader2 className="h-5 w-5 animate-spin text-primary-500" />}
                   {isDone && <Check className="h-5 w-5 text-emerald-500" />}
@@ -393,13 +408,13 @@ export default function ReviewCreatePage() {
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-1 text-lg font-semibold text-gray-900">2. 选择评审 Agent</h2>
+          <h2 className="mb-1 text-lg font-semibold text-gray-900">2. 选择评审角色</h2>
           <p className="mb-4 text-xs text-gray-500">最多选择 5 个 ({selectedAgentIds.length}/5)</p>
           {agents.length === 0 ? (
             <div className="py-8 text-center">
-              <p className="text-sm text-gray-500">还没有 Agent</p>
+              <p className="text-sm text-gray-500">还没有角色</p>
               <Link to="/agents" className="mt-2 inline-block text-xs font-medium text-primary-600 no-underline hover:underline">
-                去创建或添加 Agent
+                去创建或添加角色
               </Link>
             </div>
           ) : (
@@ -444,7 +459,7 @@ export default function ReviewCreatePage() {
           className="flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Play className="h-4 w-4" />
-          开始评审 ({selectedAgentIds.length} 位 Agent)
+          开始评审 ({selectedAgentIds.length} 位角色)
         </button>
       </div>
     </div>

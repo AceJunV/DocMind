@@ -7,7 +7,7 @@ const STEPS = [
   {
     icon: Sparkles,
     title: '欢迎使用 DocMind',
-    description: 'DocMind 是一个多角色 AI 文档评审平台。多个 AI Agent 从不同角度评审你的文档，帮助你发现改进空间。',
+    description: 'DocMind 是一个多角色 AI 文档评审平台。多个 AI 角色从不同角度评审你的文档，帮助你发现改进空间。',
     color: 'bg-primary-50 text-primary-600',
   },
   {
@@ -20,24 +20,24 @@ const STEPS = [
   },
   {
     icon: Bot,
-    title: '2. 添加评审 Agent',
-    description: '在 Agent 工坊选择预设角色（如教育专家、产品经理），或自定义创建你专属的评审角色。',
+    title: '2. 添加评审角色',
+    description: '在角色工坊选择预设角色（如教育专家、产品经理），或自定义创建你专属的评审角色。',
     action: '/agents',
-    actionLabel: '前往 Agent 工坊',
+    actionLabel: '前往角色工坊',
     color: 'bg-violet-50 text-violet-600',
   },
   {
     icon: ClipboardCheck,
     title: '3. 发起评审',
-    description: '选择文档和 Agent，发起多角色评审。每个 Agent 会独立给出评分、观点和修改建议。',
+    description: '选择文档和角色，发起多角色评审。每个角色会独立给出评分、观点和修改建议。',
     action: '/reviews/create',
     actionLabel: '发起评审',
     color: 'bg-emerald-50 text-emerald-600',
   },
   {
     icon: MessageCircle,
-    title: '4. Agent 辩论',
-    description: '评审完成后，你可以让 Agent 们进入聊天室，围绕争议点展开辩论，深入探讨每个建议。',
+    title: '4. 角色辩论',
+    description: '评审完成后，你可以让角色们进入聊天室，围绕争议点展开辩论，深入探讨每个建议。',
     color: 'bg-amber-50 text-amber-600',
   },
 ]

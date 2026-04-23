@@ -37,6 +37,24 @@ export default function ReviewDetailPage() {
     )
   }
 
+  if (review.status === 'in_progress') {
+    return (
+      <div className="space-y-6 animate-slide-up">
+        <Link to="/reviews" className="flex items-center gap-1 text-sm text-gray-500 no-underline hover:text-gray-700">
+          <ArrowLeft className="h-4 w-4" /> 返回评审大厅
+        </Link>
+        <div className="rounded-xl border border-primary-200 bg-primary-50/50 py-16 text-center">
+          <RefreshCw className="mx-auto mb-3 h-12 w-12 text-primary-400 animate-spin" />
+          <p className="font-medium text-gray-700">评审正在进行中...</p>
+          <p className="mt-2 text-sm text-gray-500">角色正在分析文档，请稍候。</p>
+          <Link to="/reviews" className="mt-4 inline-block rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 no-underline hover:bg-gray-50">
+            返回评审大厅
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   const agentReviews = review.agent_reviews || []
   const completedReviews = agentReviews.filter((item) => item.status !== 'failed')
   const failedReviews = agentReviews.filter((item) => item.status === 'failed')
@@ -167,9 +185,13 @@ export default function ReviewDetailPage() {
     toast('success', '教研评审报告已下载')
   }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(buildReportMarkdown())
-    toast('success', '评审报告已复制到剪贴板')
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(buildReportMarkdown())
+      toast('success', '评审报告已复制到剪贴板')
+    } catch {
+      toast('error', '复制失败，请手动复制')
+    }
   }
 
   const handleCreateChat = () => {
@@ -250,7 +272,7 @@ export default function ReviewDetailPage() {
             共 {agentReviews.length} 位角色，其中成功 {completedReviews.length} 位，失败 {failedReviews.length} 位
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={handleCreateChat}
             className="flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-100"
@@ -261,7 +283,7 @@ export default function ReviewDetailPage() {
             onClick={handleExport}
             className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
           >
-            <Download className="h-4 w-4" /> 下载报告
+            <Download className="h-4 w-4" /> 下载 Markdown 报告
           </button>
           <button
             onClick={handleCopy}
@@ -300,8 +322,8 @@ export default function ReviewDetailPage() {
             <p className="mb-2 text-sm text-gray-500">综合评分</p>
             <p className="text-5xl font-bold text-gray-900">{review.overall_score.toFixed(1)}</p>
             <div className="mt-1 text-2xl text-yellow-500">
-              {'★'.repeat(Math.round(review.overall_score))}
-              {'☆'.repeat(Math.max(0, 5 - Math.round(review.overall_score)))}
+              {'★'.repeat(Math.max(1, Math.round(review.overall_score)))}
+              {'☆'.repeat(5 - Math.max(1, Math.round(review.overall_score)))}
             </div>
             <p className="mt-3 text-sm text-gray-500">
               成功分析 {completedReviews.length} 份 · 共识 {consensus.length} 个 · 争议 {controversies.length} 个 · 建议 {allSuggestions.length} 条

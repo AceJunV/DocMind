@@ -2,9 +2,10 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Upload, Search, FileText, File, FileCode, MoreHorizontal,
-  Clock, Eye, Trash2, ClipboardCheck, X, CloudUpload,
+  Clock, Trash2, ClipboardCheck, X, CloudUpload,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatTimeAgo, formatFileSize } from '@/utils/format'
 import { useDocumentStore } from '@/stores/documentStore'
 import { useAuthStore } from '@/stores/authStore'
 import { parseDocument, createDocumentFromFile, SUPPORTED_EXTENSIONS, MAX_FILE_SIZE } from '@/services/documentParser'
@@ -24,22 +25,6 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   parsing: { label: '解析中', color: 'bg-amber-50 text-amber-600' },
   uploading: { label: '上传中', color: 'bg-blue-50 text-blue-600' },
   error: { label: '解析失败', color: 'bg-red-50 text-red-600' },
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-}
-
-function formatTimeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const hours = Math.floor(diff / 3600000)
-  if (hours < 1) return '刚刚'
-  if (hours < 24) return `${hours} 小时前`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days} 天前`
-  return new Date(dateStr).toLocaleDateString('zh-CN')
 }
 
 export default function DocumentListPage() {
@@ -239,7 +224,7 @@ export default function DocumentListPage() {
             const colorClass = FILE_COLORS[doc.file_type] || 'text-gray-500 bg-gray-50'
             const status = STATUS_MAP[doc.status]
             return (
-              <div key={doc.id} className="group relative rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5">
+              <div key={doc.id} className="group relative rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 transform-gpu">
                 <Link to={`/documents/${doc.id}`} className="absolute inset-0 z-0" />
                 <div className="relative z-10 pointer-events-none">
                   <div className="flex items-start justify-between mb-3">
@@ -283,13 +268,14 @@ export default function DocumentListPage() {
                   </div>
 
                   {doc.status === 'ready' && (
-                    <div className="mt-3 flex gap-2 border-t border-gray-100 pt-3">
-                      <span className="flex items-center gap-1 text-xs text-primary-600 font-medium">
+                    <div className="mt-3 flex gap-2 border-t border-gray-100 pt-3 pointer-events-auto">
+                      <Link
+                        to={`/reviews/create?doc=${doc.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1 text-xs text-primary-600 font-medium no-underline hover:text-primary-700"
+                      >
                         <ClipboardCheck className="h-3 w-3" /> 发起评审
-                      </span>
-                      <span className="flex items-center gap-1 text-xs text-gray-500">
-                        <Eye className="h-3 w-3" /> 查看详情
-                      </span>
+                      </Link>
                     </div>
                   )}
                 </div>
