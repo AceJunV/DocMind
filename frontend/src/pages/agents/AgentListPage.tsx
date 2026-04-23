@@ -14,7 +14,8 @@ import { chatCompletion, LLMError } from '@/services/llmService'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { createId } from '@/utils/id'
-import type { Agent, AgentTemplate, AgentColor, AgentCategory } from '@/types'
+import type { Agent, AgentTemplate, AgentColor, AgentCategory, TeachingDimension } from '@/types'
+import { TEACHING_DIMENSIONS } from '@/types'
 
 const TEMPLATE_GROUPS: { label: string; icon: string; ids: string[] }[] = [
   { label: '教研老师', icon: '📐', ids: ['tpl-edu-1', 'tpl-edu-2', 'tpl-edu-3', 'tpl-edu-4', 'tpl-edu-5', 'tpl-edu-6'] },
@@ -92,7 +93,7 @@ function parseAgentMD(md: string): Partial<Agent> | null {
     tagline: getStr('tagline'),
     color: ALL_COLORS.includes(colorVal as AgentColor) ? (colorVal as AgentColor) : 'indigo',
     category: ['teacher', 'student', 'parent'].includes(categoryVal) ? (categoryVal as AgentCategory) : undefined,
-    focusDimension: getStr('focusDimension') || undefined,
+    focusDimension: (TEACHING_DIMENSIONS as readonly string[]).includes(getStr('focusDimension')) ? (getStr('focusDimension') as TeachingDimension) : undefined,
     source: (getStr('source') === 'template' ? 'template' : 'custom') as Agent['source'],
     expertise,
     personality: {
