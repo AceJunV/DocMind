@@ -5,6 +5,8 @@ import { TypingIndicator } from '@/components/ui/TypingIndicator'
 import { SlashCommandMenu } from '@/components/chat/SlashCommandMenu'
 import { ChatToolbar } from '@/components/chat/ChatToolbar'
 import { DocumentPicker } from '@/components/chat/DocumentPicker'
+import { EmojiReactionBar } from '@/components/chat/EmojiReactionBar'
+import { ChatRoomStatusBar } from '@/components/chat/ChatRoomStatusBar'
 import { AGENT_COLORS, useAgentStore } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useDocumentStore } from '@/stores/documentStore'
@@ -42,6 +44,8 @@ export default function ChatRoomPage() {
   const closeRoom = useChatStore((s) => s.closeRoom)
   const removeRoom = useChatStore((s) => s.removeRoom)
   const addBookmarkFn = useChatStore((s) => s.addBookmark)
+  const addReaction = useChatStore((s) => s.addReaction)
+  const removeReaction = useChatStore((s) => s.removeReaction)
   const allAgents = useAgentStore((s) => s.agents)
   const allDocuments = useDocumentStore((s) => s.documents)
   const doc = useMemo(() => room?.document_id ? allDocuments.find((d) => d.id === room.document_id) : null, [allDocuments, room])
@@ -120,7 +124,11 @@ export default function ChatRoomPage() {
       content,
       created_at: new Date().toISOString(),
     })
-  }, [id, addMessage])
+    const userName = user?.name || ''
+    if (userName && content.includes(`@${userName}`)) {
+      toast('info', `${agent.name} 提到了你`)
+    }
+  }, [id, addMessage, user])
 
   // Auto-start: Agents greet & discuss when entering a room with doc context
   useEffect(() => {
@@ -237,6 +245,17 @@ export default function ChatRoomPage() {
     }
     inputRef.current?.focus()
   }, [messages, id, addBookmarkFn])
+
+  const handleReaction = useCallback((messageId: string, emoji: string) => {
+    if (!id) return
+    const msg = messages.find((m) => m.id === messageId)
+    const existing = msg?.reactions?.find((r) => r.emoji === emoji)
+    if (existing?.userReacted) {
+      removeReaction(id, messageId, emoji, true)
+    } else {
+      addReaction(id, messageId, emoji, true)
+    }
+  }, [id, messages, addReaction, removeReaction])
 
   const handleDocAttach = useCallback((doc: { id: string; title: string; file_type: string }) => {
     setPendingAttachment({ documentId: doc.id, title: doc.title, fileType: doc.file_type })
@@ -512,6 +531,13 @@ export default function ChatRoomPage() {
             </button>
           </div>
 
+          <ChatRoomStatusBar
+            messages={messages}
+            participants={participants}
+            discussionMode={room.discussionMode}
+            isActive={room.status === 'active' && !loading}
+          />
+
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4">
             {messages.map((msg) => {
               const replyQuote = msg.replyToMessage ? (
@@ -598,6 +624,10 @@ export default function ChatRoomPage() {
                       {msg.content}
                       {attachCard}
                     </div>
+                    <EmojiReactionBar
+                      reactions={msg.reactions}
+                      onReact={(emoji) => handleReaction(msg.id, emoji)}
+                    />
                   </div>
                 </div>
               )
