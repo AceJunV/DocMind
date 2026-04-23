@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, UserPlus, FileText, MessageCircle, X, Trash2 } from 'lucide-react'
+import { ArrowLeft, Send, UserPlus, FileText, MessageCircle, X, Trash2, Reply, Check, CheckCheck, AlertCircle, Loader2 } from 'lucide-react'
 import { TypingIndicator } from '@/components/ui/TypingIndicator'
+import { SlashCommandMenu } from '@/components/chat/SlashCommandMenu'
+import { ChatToolbar } from '@/components/chat/ChatToolbar'
+import { DocumentPicker } from '@/components/chat/DocumentPicker'
 import { AGENT_COLORS, useAgentStore } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useDocumentStore } from '@/stores/documentStore'
@@ -11,7 +14,7 @@ import { isModelConfigValid, useSettingsStore } from '@/stores/settingsStore'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { createId } from '@/utils/id'
-import type { ChatMessage, Agent } from '@/types'
+import type { ChatMessage, ChatMessageAttachment, Agent } from '@/types'
 
 const EMPTY_MESSAGES: ChatMessage[] = []
 
@@ -34,9 +37,11 @@ export default function ChatRoomPage() {
   const messagesMap = useChatStore((s) => s.messages)
   const messages = messagesMap[id || ''] || EMPTY_MESSAGES
   const addMessage = useChatStore((s) => s.addMessage)
+  const updateMessageStatus = useChatStore((s) => s.updateMessageStatus)
   const addParticipant = useChatStore((s) => s.addParticipant)
   const closeRoom = useChatStore((s) => s.closeRoom)
   const removeRoom = useChatStore((s) => s.removeRoom)
+  const addBookmarkFn = useChatStore((s) => s.addBookmark)
   const allAgents = useAgentStore((s) => s.agents)
   const allDocuments = useDocumentStore((s) => s.documents)
   const doc = useMemo(() => room?.document_id ? allDocuments.find((d) => d.id === room.document_id) : null, [allDocuments, room])
@@ -48,9 +53,13 @@ export default function ChatRoomPage() {
   const [typingAgentIds, setTypingAgentIds] = useState<string[]>([])
   const [showDoc, setShowDoc] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
+  const [showDocPicker, setShowDocPicker] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const [slashQuery, setSlashQuery] = useState<string | null>(null)
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
+  const [pendingAttachment, setPendingAttachment] = useState<ChatMessageAttachment | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -193,24 +202,75 @@ export default function ChatRoomPage() {
     return { targetAgent: agent, cleanText: text.slice(match[0].length) }
   }
 
+  const handleSlashCommand = useCallback((cmd: { id: string }) => {
+    setSlashQuery(null)
+    setInput('')
+    switch (cmd.id) {
+      case 'quote': {
+        const lastAgentMsg = [...messages].reverse().find((m) => m.sender_type === 'agent' && m.sender_id !== 'system')
+        if (lastAgentMsg) setReplyTo(lastAgentMsg)
+        else toast('info', '没有可引用的消息')
+        break
+      }
+      case 'doc':
+        setShowDocPicker(true)
+        break
+      case 'vote':
+        toast('info', '请在消息中描述投票问题，功能开发中')
+        break
+      case 'summary':
+        toast('info', '讨论总结功能开发中')
+        break
+      case 'collect': {
+        const lastMsg = [...messages].reverse().find((m) => m.sender_type === 'agent' && m.sender_id !== 'system')
+        if (lastMsg && id) {
+          addBookmarkFn({ id: createId(), roomId: id, messageId: lastMsg.id, createdAt: new Date().toISOString() })
+          toast('success', '已收藏最近一条消息')
+        } else {
+          toast('info', '没有可收藏的消息')
+        }
+        break
+      }
+      case 'event':
+        toast('info', '角色事件触发功能开发中')
+        break
+    }
+    inputRef.current?.focus()
+  }, [messages, id, addBookmarkFn])
+
+  const handleDocAttach = useCallback((doc: { id: string; title: string; file_type: string }) => {
+    setPendingAttachment({ documentId: doc.id, title: doc.title, fileType: doc.file_type })
+    setShowDocPicker(false)
+    inputRef.current?.focus()
+  }, [])
+
   const handleSend = async () => {
-    if (!input.trim() || loading || !id) return
+    if ((!input.trim() && !pendingAttachment) || loading || !id) return
     const text = input.trim()
     setInput('')
+    setSlashQuery(null)
 
     const { targetAgent, cleanText } = parseTargetAgent(text)
 
+    const msgId = createId()
     const userMsg: ChatMessage = {
-      id: createId(),
+      id: msgId,
       room_id: id,
       sender_type: 'user',
       sender_id: user?.id || '',
       sender_name: user?.name || '我',
       content: text,
       target_agent_id: targetAgent?.id,
+      reply_to: replyTo?.id,
+      replyToMessage: replyTo ? { senderName: replyTo.sender_name, content: replyTo.content } : undefined,
+      attachment: pendingAttachment || undefined,
+      status: 'sending',
       created_at: new Date().toISOString(),
     }
     addMessage(id, userMsg)
+    setReplyTo(null)
+    setPendingAttachment(null)
+    updateMessageStatus(id, msgId, 'sent')
 
     if (!hasValidConfig) {
       addMessage(id, {
@@ -272,6 +332,7 @@ export default function ChatRoomPage() {
       }
     }
 
+    updateMessageStatus(id, msgId, 'delivered')
     setLoading(false)
   }
 
@@ -453,11 +514,47 @@ export default function ChatRoomPage() {
 
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4">
             {messages.map((msg) => {
+              const replyQuote = msg.replyToMessage ? (
+                <div className="mb-1.5 rounded-md bg-gray-100 dark:bg-gray-700/50 px-3 py-1.5 text-xs border-l-2 border-gray-300 dark:border-gray-500">
+                  <span className="font-medium text-gray-600 dark:text-gray-300">{msg.replyToMessage.senderName}</span>
+                  <p className="text-gray-500 dark:text-gray-400 truncate mt-0.5">{msg.replyToMessage.content.slice(0, 80)}</p>
+                </div>
+              ) : null
+
+              const attachCard = msg.attachment ? (
+                <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                  <FileText className="h-4 w-4 text-primary-500 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate">{msg.attachment.title}</p>
+                    <p className="text-[10px] text-gray-400">{msg.attachment.fileType.toUpperCase()}</p>
+                  </div>
+                </div>
+              ) : null
+
+              const statusIcon = msg.sender_type === 'user' && msg.status ? (
+                <span className="inline-flex items-center ml-1">
+                  {msg.status === 'sending' && <Loader2 className="h-3 w-3 text-gray-400 animate-spin" />}
+                  {msg.status === 'sent' && <Check className="h-3 w-3 text-gray-400" />}
+                  {msg.status === 'delivered' && <CheckCheck className="h-3 w-3 text-primary-500" />}
+                  {msg.status === 'failed' && <AlertCircle className="h-3 w-3 text-red-500" />}
+                </span>
+              ) : null
+
               if (msg.sender_type === 'user') {
                 return (
                   <div key={msg.id} className="flex justify-end">
-                    <div className="max-w-[70%] rounded-xl rounded-tr-sm bg-gray-100 px-4 py-2.5 text-sm text-gray-700 whitespace-pre-wrap">
-                      {msg.content}
+                    <div className="max-w-[70%]">
+                      {replyQuote}
+                      <div className="rounded-xl rounded-tr-sm bg-gray-100 px-4 py-2.5 text-sm text-gray-700 whitespace-pre-wrap">
+                        {msg.content}
+                        {attachCard}
+                      </div>
+                      <div className="flex justify-end items-center gap-1 mt-0.5">
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {statusIcon}
+                      </div>
                     </div>
                   </div>
                 )
@@ -472,7 +569,7 @@ export default function ChatRoomPage() {
               }
 
               return (
-                <div key={msg.id} className="flex justify-start">
+                <div key={msg.id} className="group flex justify-start">
                   <div className="max-w-[75%]">
                     <div className="flex items-center gap-1.5 mb-1">
                       <div
@@ -485,12 +582,21 @@ export default function ChatRoomPage() {
                       <span className="text-xs text-gray-400 ml-1">
                         {new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                       </span>
+                      <button
+                        onClick={() => { setReplyTo(msg); inputRef.current?.focus() }}
+                        className="opacity-0 group-hover:opacity-100 ml-1 text-gray-400 hover:text-primary-500 bg-transparent border-0 cursor-pointer transition-opacity p-0"
+                        title="引用回复"
+                      >
+                        <Reply className="h-3.5 w-3.5" />
+                      </button>
                     </div>
+                    {replyQuote}
                     <div
                       className="rounded-xl rounded-tl-sm px-4 py-2.5 text-sm text-gray-700 whitespace-pre-wrap border-l-2"
                       style={{ backgroundColor: AGENT_COLORS[msg.sender_color] + '08', borderLeftColor: AGENT_COLORS[msg.sender_color] }}
                     >
                       {msg.content}
+                      {attachCard}
                     </div>
                   </div>
                 </div>
@@ -511,6 +617,13 @@ export default function ChatRoomPage() {
               <p className="text-sm text-gray-500 text-center">此聊天室已关闭</p>
             ) : (
               <div className="relative">
+                {slashQuery !== null && (
+                  <SlashCommandMenu
+                    query={slashQuery}
+                    onSelect={handleSlashCommand}
+                    onClose={() => setSlashQuery(null)}
+                  />
+                )}
                 {mentionQuery !== null && (() => {
                   const filtered = participants.filter((p) =>
                     !mentionQuery || p.name.toLowerCase().includes(mentionQuery.toLowerCase())
@@ -542,6 +655,55 @@ export default function ChatRoomPage() {
                     </div>
                   )
                 })()}
+
+                {replyTo && (
+                  <div className="flex items-center gap-2 mb-2 rounded-lg bg-gray-50 dark:bg-gray-700/50 px-3 py-2 border-l-2 border-primary-500">
+                    <Reply className="h-3.5 w-3.5 text-primary-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-medium text-primary-600 dark:text-primary-400">{replyTo.sender_name}</span>
+                      <p className="text-xs text-gray-500 truncate">{replyTo.content.slice(0, 60)}</p>
+                    </div>
+                    <button
+                      onClick={() => setReplyTo(null)}
+                      className="text-gray-400 hover:text-gray-600 bg-transparent border-0 cursor-pointer p-0"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {pendingAttachment && (
+                  <div className="flex items-center gap-2 mb-2 rounded-lg bg-primary-50 dark:bg-primary-900/20 px-3 py-2 border border-primary-200 dark:border-primary-800">
+                    <FileText className="h-4 w-4 text-primary-500 shrink-0" />
+                    <span className="flex-1 text-xs font-medium text-gray-700 dark:text-gray-200 truncate">{pendingAttachment.title}</span>
+                    <button
+                      onClick={() => setPendingAttachment(null)}
+                      className="text-gray-400 hover:text-gray-600 bg-transparent border-0 cursor-pointer p-0"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                <ChatToolbar
+                  onQuote={() => {
+                    const last = [...messages].reverse().find((m) => m.sender_type === 'agent' && m.sender_id !== 'system')
+                    if (last) setReplyTo(last)
+                    else toast('info', '没有可引用的消息')
+                  }}
+                  onDoc={() => setShowDocPicker(true)}
+                  onVote={() => toast('info', '投票功能开发中')}
+                  onSummary={() => toast('info', '总结功能开发中')}
+                  onBookmark={() => {
+                    const last = [...messages].reverse().find((m) => m.sender_type === 'agent' && m.sender_id !== 'system')
+                    if (last && id) {
+                      addBookmarkFn({ id: createId(), roomId: id, messageId: last.id, createdAt: new Date().toISOString() })
+                      toast('success', '已收藏最近一条消息')
+                    }
+                  }}
+                  disabled={loading}
+                />
+
                 <div className="flex gap-2">
                   <input
                     ref={inputRef}
@@ -550,6 +712,13 @@ export default function ChatRoomPage() {
                     onChange={(e) => {
                       const val = e.target.value
                       setInput(val)
+
+                      if (val === '/' || (val.startsWith('/') && !val.includes(' '))) {
+                        setSlashQuery(val.slice(1))
+                      } else {
+                        setSlashQuery(null)
+                      }
+
                       const atIndex = val.lastIndexOf('@')
                       if (atIndex >= 0 && (atIndex === 0 || val[atIndex - 1] === ' ')) {
                         const query = val.slice(atIndex + 1)
@@ -563,16 +732,16 @@ export default function ChatRoomPage() {
                       }
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === 'Escape') { setMentionQuery(null); return }
-                      if (e.key === 'Enter' && !e.shiftKey && mentionQuery === null) handleSend()
+                      if (e.key === 'Escape') { setMentionQuery(null); setSlashQuery(null); return }
+                      if (e.key === 'Enter' && !e.shiftKey && mentionQuery === null && slashQuery === null) handleSend()
                     }}
-                    placeholder={`输入消息... 用 @ 提及某人`}
+                    placeholder={`输入消息... 用 @ 提及某人，/ 快捷命令`}
                     className="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                     disabled={loading}
                   />
                   <button
                     onClick={handleSend}
-                    disabled={!input.trim() || loading}
+                    disabled={(!input.trim() && !pendingAttachment) || loading}
                     className="rounded-lg bg-primary-600 px-4 py-2.5 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer border-0 transition-colors"
                   >
                     <Send className="h-4 w-4" />
@@ -583,6 +752,14 @@ export default function ChatRoomPage() {
           </div>
         </div>
       </div>
+
+      {showDocPicker && (
+        <DocumentPicker
+          documents={allDocuments}
+          onSelect={handleDocAttach}
+          onClose={() => setShowDocPicker(false)}
+        />
+      )}
     </div>
   )
 }
