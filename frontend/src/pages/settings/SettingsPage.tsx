@@ -46,6 +46,7 @@ function getDefaultForm(): FormValues {
     apiKey: '',
     baseUrl: '',
     localEndpoint: '',
+    maxConcurrentReviews: 1,
   }
 }
 
@@ -529,7 +530,33 @@ export default function SettingsPage() {
 
               <div className="h-px bg-gray-100" />
 
-              {/* Action Buttons */}
+              {/* Concurrent Reviews */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  评审并发数
+                </label>
+                <div className="relative">
+                  <select
+                    value={form.maxConcurrentReviews ?? 1}
+                    onChange={(e) => updateField('maxConcurrentReviews', Number(e.target.value))}
+                    className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  >
+                    <option value={1}>串行（逐个评审，稳定推荐）</option>
+                    <option value={2}>2 个并行</option>
+                    <option value={3}>3 个并行</option>
+                    <option value={5}>全部并行（最快）</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+                {(form.maxConcurrentReviews ?? 1) > 1 && (
+                  <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <span>并行评审会同时发起多个 API 请求，请确认您的模型服务商支持并发调用，否则可能触发限流或报错。</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="h-px bg-gray-100" />
               <div className="flex items-center gap-3 flex-wrap">
                 <button
                   onClick={handleSave}
@@ -613,7 +640,7 @@ export default function SettingsPage() {
                 <h4 className="font-semibold text-gray-900 mb-1 flex items-center gap-1.5">
                   <Globe className="h-4 w-4 text-blue-500" /> 官方模式
                 </h4>
-                <p>适用于 OpenAI、DeepSeek、Qwen、GLM、Kimi、xAI、Mistral、Anthropic、Google 等官方接口。只需填写模型名称和 API Key，系统会自动匹配对应的官方 Base URL。</p>
+                <p>适用于 OpenAI、Anthropic、Google Gemini、DeepSeek、阿里云/Qwen、智谱/GLM、Moonshot/Kimi、xAI/Grok、百度/ERNIE、字节跳动/Doubao、MiniMax、Mistral 等官方接口。只需填写模型名称和 API Key，系统会自动匹配对应的官方 Base URL。</p>
               </div>
 
               <div className="rounded-lg bg-purple-50 border border-purple-100 p-4">

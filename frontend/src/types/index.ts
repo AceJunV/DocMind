@@ -80,6 +80,7 @@ export interface Agent {
   category?: AgentCategory
   focusDimension?: TeachingDimension
   creation_history?: { role: 'ai' | 'user'; content: string }[]
+  last_used_at?: string
   created_at: string
 }
 
@@ -124,8 +125,9 @@ export interface AgentReview {
   opinion: string
   status?: 'completed' | 'failed'
   error_message?: string
-  dimensions: { name: string; score: number; comment?: string }[]
+  dimensions: { name: string; score: number; comment?: string; evidence?: string }[]
   suggestions: Suggestion[]
+  highlights?: string[]
 }
 
 export interface Suggestion {
@@ -134,6 +136,8 @@ export interface Suggestion {
   priority: 'high' | 'medium' | 'low'
   adopted: boolean
   source_agent: string
+  evidence?: string
+  expected_effect?: string
 }
 
 export interface ReviewSummary {
@@ -180,6 +184,7 @@ export interface ModelConfig {
   apiKey: string
   baseUrl: string
   localEndpoint: string
+  maxConcurrentReviews?: number
 }
 
 export interface SavedModelProfile {

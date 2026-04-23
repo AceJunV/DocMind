@@ -5,26 +5,48 @@ import { createId } from '@/utils/id'
 
 const REVIEW_SYSTEM_PROMPT = (agent: Agent) => `${agent.system_prompt}
 
-你现在正在执行教研案评审任务。请按照以下 JSON 格式输出评审结果，仅输出 JSON：
+你现在正在执行教研案评审任务。你必须严格从【${agent.name}】的角色视角出发，提出独特、有深度的见解，避免与其他评审者雷同的泛泛评价。
+
+## 评审要求
+1. **引用原文**：在 comment、suggestion 和 opinion 中，针对具体问题或亮点时，必须引用教研案的原文片段（格式：（原文：「xxx」）），让老师知道你在评价哪里。
+2. **深度分析**：不要停留在表面，要找到问题背后的原因，以及改进后对学生学习的实际影响。
+3. **建议数量**：提供 3-8 条建议，且每条建议必须包含"问题定位 → 改进方案 → 参考方向"三部分，禁止空话和泛泛而谈。
+4. **优先级含义**：high = 直接影响学生理解和学习效果；medium = 影响教学质量但非致命；low = 锦上添花的优化。
+5. **亮点发现**：即便文档有明显不足，也必须找到 1-3 个真正出彩的地方，客观平衡评价。
+
+请严格按以下 JSON 格式输出，仅输出 JSON，不得有任何其他内容：
 {
+  "status_message": "一句俏皮有趣的角色独白，用【${agent.name}】的语气描述刚才的评审心得（2-3句，有个性，有角色感）",
   "score": 4.2,
-  "opinion": "从你的角色视角出发，对这份教研案的整体评价，2-4段话。",
+  "opinion": "【总体印象】1-2句整体感受，带角色视角。\n\n【最大亮点】1-2句，说明哪里做得最好，引用原文。\n\n【核心问题】1-2句，直点最关键的不足，分析跨维度的因果关系（如"目标偏高导致难点无法在课时内完成"）。\n\n【综合建议】1-2句，从本角色视角给出最重要的行动建议。",
+  "highlights": [
+    "亮点1：xxx（引用原文），分析其价值",
+    "亮点2：xxx（可选）"
+  ],
   "dimensions": [
-    { "name": "课程设计", "score": 4.5, "comment": "一句话点评" },
-    { "name": "知识链", "score": 4.0, "comment": "一句话点评" },
-    { "name": "教学目标", "score": 3.8, "comment": "一句话点评" },
-    { "name": "课程重点", "score": 4.5, "comment": "一句话点评" },
-    { "name": "课程难点", "score": 4.0, "comment": "一句话点评" },
-    { "name": "学习梯度", "score": 3.5, "comment": "一句话点评" }
+    { "name": "课程设计", "score": 4.5, "comment": "2-3句话，包含：具体发现 + 理由 + 改进方向。", "evidence": "原文中最能支撑此评价的片段（可选）" },
+    { "name": "知识链", "score": 4.0, "comment": "2-3句话" },
+    { "name": "教学目标", "score": 3.8, "comment": "2-3句话" },
+    { "name": "课程重点", "score": 4.5, "comment": "2-3句话" },
+    { "name": "课程难点", "score": 4.0, "comment": "2-3句话" },
+    { "name": "学习梯度", "score": 3.5, "comment": "2-3句话" }
   ],
   "suggestions": [
-    { "content": "具体修改建议，最好引用原文位置", "priority": "high" },
-    { "content": "另一条建议", "priority": "medium" }
+    {
+      "content": "①问题定位：xxx（原文：「xxx」）→ ②改进方案：具体怎么改 → ③参考方向：可参考哪种教学实践或理论",
+      "priority": "high",
+      "evidence": "直接引用原文的问题片段（可选）",
+      "expected_effect": "实施此建议后，学生学习效果预计会有什么改善（仅 high 优先级必填）"
+    },
+    {
+      "content": "①问题定位：xxx → ②改进方案：xxx → ③参考方向：xxx",
+      "priority": "medium"
+    }
   ]
 }
 
 评分范围 1-5，保留一位小数。dimensions 必须包含以上 6 个维度。suggestions 的 priority 仅限 "high"、"medium"、"low"。
-重要：不要评价课件交互逻辑和功能设计，只专注教研内容本身。`
+重要：不要评价课件交互逻辑和功能设计，只专注教研内容本身。comments 不得只写一句话。`
 
 function parseReviewJSON(text: string) {
   try {
@@ -34,8 +56,9 @@ function parseReviewJSON(text: string) {
     return JSON.parse(jsonMatch[0]) as {
       score: number
       opinion: string
-      dimensions: { name: string; score: number; comment?: string }[]
-      suggestions: { content: string; priority: string }[]
+      highlights?: string[]
+      dimensions: { name: string; score: number; comment?: string; evidence?: string }[]
+      suggestions: { content: string; priority: string; evidence?: string; expected_effect?: string }[]
     }
   } catch {
     return null
@@ -123,6 +146,7 @@ export async function executeAgentReview(
               name: dimensionName,
               score: found ? Math.min(5, Math.max(1, found.score)) : 3.5,
               comment: found?.comment,
+              evidence: found?.evidence,
             }
           })
 
@@ -133,6 +157,7 @@ export async function executeAgentReview(
             score: Math.min(5, Math.max(1, parsed.score)),
             opinion: parsed.opinion,
             status: 'completed',
+            highlights: Array.isArray(parsed.highlights) ? parsed.highlights : undefined,
             dimensions: normalizedDimensions,
             suggestions: parsedSuggestions.map((suggestion) => ({
               id: createId(),
@@ -140,6 +165,8 @@ export async function executeAgentReview(
               priority: (['high', 'medium', 'low'].includes(suggestion.priority) ? suggestion.priority : 'medium') as Suggestion['priority'],
               adopted: false,
               source_agent: agent.name,
+              evidence: suggestion.evidence,
+              expected_effect: suggestion.expected_effect,
             })),
           })
         },

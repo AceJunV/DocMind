@@ -327,7 +327,7 @@ export const useAgentStore = create<AgentState>()(
       incrementUsage: (id) => {
         set((state) => ({
           agents: state.agents.map((a) =>
-            a.id === id ? { ...a, usage_count: a.usage_count + 1 } : a
+            a.id === id ? { ...a, usage_count: a.usage_count + 1, last_used_at: new Date().toISOString() } : a
           ),
         }))
       },

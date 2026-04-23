@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Check, FileText, Loader2, Play } from 'lucide-react'
+import { ArrowLeft, Check, CheckCircle2, FileText, Loader2, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDocumentStore } from '@/stores/documentStore'
 import { AGENT_COLORS, useAgentStore } from '@/stores/agentStore'
@@ -10,7 +10,70 @@ import { isModelConfigValid, useSettingsStore } from '@/stores/settingsStore'
 import { createFailedAgentReview, executeAgentReview, generateSummary } from '@/services/reviewEngine'
 import { toast } from '@/components/ui/Toast'
 import { createId } from '@/utils/id'
+import { TEACHING_DIMENSIONS } from '@/types'
 import type { AgentReview, Review } from '@/types'
+
+const KAOMOJIS = [
+  '(｀・ω・´)',
+  '(ﾉ◕ヮ◕)ﾉ',
+  '╰(*°▽°*)╯',
+  '(•̀ᴗ•́)و',
+  '(ง •̀_•́)ง',
+  '(✿◠‿◠)',
+  '٩(˘◡˘)۶',
+  '(≧▽≦)',
+]
+
+const DIMENSION_META: { emoji: string; activeLabel: string; doneLabel: string }[] = [
+  { emoji: '📐', activeLabel: '教学框架深度分析中...', doneLabel: '教学框架分析完毕' },
+  { emoji: '🔗', activeLabel: '知识脉络梳理中...', doneLabel: '知识脉络梳理完毕' },
+  { emoji: '🎯', activeLabel: '目标合理性评估中...', doneLabel: '目标合理性评估完毕' },
+  { emoji: '📌', activeLabel: '重点内容核查中...', doneLabel: '重点内容核查完毕' },
+  { emoji: '⚡', activeLabel: '难点突破策略审查中...', doneLabel: '难点突破策略审查完毕' },
+  { emoji: '📈', activeLabel: '梯度设计评估中...', doneLabel: '梯度设计评估完毕' },
+]
+
+function DimensionProgress({ completed }: { completed: number }) {
+  const [kaomojiIdx, setKaomojiIdx] = useState(() => Math.floor(Math.random() * KAOMOJIS.length))
+
+  useEffect(() => {
+    if (completed >= 6) return
+    const timer = setInterval(() => {
+      setKaomojiIdx((prev) => (prev + 1) % KAOMOJIS.length)
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [completed])
+
+  return (
+    <div className="space-y-1 rounded-lg bg-gray-50 px-3 py-2.5 font-mono text-xs">
+      {TEACHING_DIMENSIONS.map((dim, i) => {
+        const meta = DIMENSION_META[i]
+        const isDone = i < completed
+        const isActive = i === completed
+        return (
+          <div
+            key={dim}
+            className={cn(
+              'flex items-start gap-2 transition-all duration-300',
+              isDone ? 'text-emerald-600' : isActive ? 'text-primary-700' : 'text-gray-400 opacity-50'
+            )}
+          >
+            <span className="shrink-0 select-none">
+              {isDone ? '✅' : isActive ? '⚙️' : '⬜'}
+            </span>
+            <span className={cn(isDone && 'line-through decoration-emerald-400 decoration-1')}>
+              {isDone
+                ? `${meta.emoji} 〔${dim}〕${meta.doneLabel}`
+                : isActive
+                  ? `${meta.emoji} ${KAOMOJIS[kaomojiIdx]} 〔${dim}〕${meta.activeLabel}`
+                  : `${meta.emoji} 〔${dim}〕等待中...`}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 export default function ReviewCreatePage() {
   const [searchParams] = useSearchParams()
@@ -30,9 +93,10 @@ export default function ReviewCreatePage() {
   const [selectedDocId, setSelectedDocId] = useState(autoSelectedDocId)
   const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([])
   const [phase, setPhase] = useState<'config' | 'running' | 'done'>('config')
-  const [progress, setProgress] = useState<Record<string, { status: string; text: string }>>({})
+  const [progress, setProgress] = useState<Record<string, { status: string; text: string; dimensionsCompleted: number }>>({})
   const [reviewId, setReviewId] = useState('')
   const abortRef = useRef<AbortController | null>(null)
+  const dimTimersRef = useRef<Record<string, ReturnType<typeof setInterval>>>({})
 
   const selectedDoc = documents.find((document) => document.id === selectedDocId)
   const selectedAgents = agents.filter((agent) => selectedAgentIds.includes(agent.id))
@@ -76,19 +140,29 @@ export default function ReviewCreatePage() {
     addReview(review)
     setReviewId(review.id)
 
-    const initialProgress: Record<string, { status: string; text: string }> = {}
+    const initialProgress: Record<string, { status: string; text: string; dimensionsCompleted: number }> = {}
     for (const agent of selectedAgents) {
-      initialProgress[agent.id] = { status: 'pending', text: '' }
+      initialProgress[agent.id] = { status: 'pending', text: '', dimensionsCompleted: 0 }
     }
     setProgress(initialProgress)
 
-    const results: AgentReview[] = []
+    const maxConcurrent = config.maxConcurrentReviews ?? 1
+    const results: (AgentReview | null)[] = new Array(selectedAgents.length).fill(null)
 
-    for (const agent of selectedAgents) {
+    const runAgent = async (agent: typeof selectedAgents[0], idx: number) => {
       setProgress((previous) => ({
         ...previous,
-        [agent.id]: { status: 'reviewing', text: '' },
+        [agent.id]: { status: 'reviewing', text: '', dimensionsCompleted: 0 },
       }))
+
+      let dimCount = 0
+      dimTimersRef.current[agent.id] = setInterval(() => {
+        dimCount = Math.min(dimCount + 1, 5)
+        setProgress((prev) => ({
+          ...prev,
+          [agent.id]: { ...prev[agent.id], dimensionsCompleted: dimCount },
+        }))
+      }, 4000)
 
       try {
         const result = await executeAgentReview(
@@ -98,44 +172,63 @@ export default function ReviewCreatePage() {
             ...previous,
             [agent.id]: { status: 'reviewing', text },
           })),
-          abortRef.current.signal,
+          abortRef.current!.signal,
         )
 
-        results.push(result)
+        results[idx] = result
         incrementUsage(agent.id)
+        clearInterval(dimTimersRef.current[agent.id])
         setProgress((previous) => ({
           ...previous,
-          [agent.id]: { status: 'done', text: '' },
+          [agent.id]: { status: 'done', text: '', dimensionsCompleted: 6 },
         }))
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : '评审失败'
-        results.push(createFailedAgentReview(agent, errorMessage))
+        results[idx] = createFailedAgentReview(agent, errorMessage)
+        clearInterval(dimTimersRef.current[agent.id])
         setProgress((previous) => ({
           ...previous,
-          [agent.id]: { status: 'error', text: errorMessage },
+          [agent.id]: { status: 'error', text: errorMessage, dimensionsCompleted: 0 },
         }))
       }
     }
 
-    const successfulResults = results.filter((result) => result.status !== 'failed')
+    // Semaphore concurrency pool: maxConcurrent workers share the agent queue
+    const agentQueue = [...selectedAgents.entries()]
+    let queueIdx = 0
+    const worker = async () => {
+      while (queueIdx < agentQueue.length) {
+        const [idx, agent] = agentQueue[queueIdx++]
+        await runAgent(agent, idx)
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(maxConcurrent, selectedAgents.length) }, worker))
+
+    const finalResults = results.filter((r): r is AgentReview => r !== null)
+    const successfulResults = finalResults.filter((result) => result.status !== 'failed')
     const overallScore = successfulResults.length > 0
       ? successfulResults.reduce((sum, result) => sum + result.score, 0) / successfulResults.length
       : undefined
 
-    const summary = await generateSummary(results)
+    let summary
+    try {
+      summary = await generateSummary(finalResults)
+    } catch {
+      summary = undefined
+    }
 
     updateReview(review.id, {
       status: 'completed',
       overall_score: overallScore,
-      agent_reviews: results,
+      agent_reviews: finalResults,
       summary,
     })
     incrementReviewCount(selectedDocId)
 
     setPhase('done')
 
-    if (successfulResults.length === results.length) {
-      toast('success', `评审完成！已生成 ${results.length} 份分析结果`)
+    if (successfulResults.length === finalResults.length) {
+      toast('success', `评审完成！已生成 ${finalResults.length} 份分析结果`)
       return
     }
 
@@ -144,10 +237,15 @@ export default function ReviewCreatePage() {
       return
     }
 
-    toast('info', `已生成 ${successfulResults.length} 份结果，另有 ${results.length - successfulResults.length} 位角色生成失败`)
+    toast('info', `已生成 ${successfulResults.length} 份结果，另有 ${finalResults.length - successfulResults.length} 位角色生成失败`)
   }
 
-  useEffect(() => () => abortRef.current?.abort(), [])
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+      Object.values(dimTimersRef.current).forEach((t) => clearInterval(t))
+    }
+  }, [])
 
   if (phase === 'done') {
     return (
@@ -184,17 +282,25 @@ export default function ReviewCreatePage() {
             const isReviewing = item?.status === 'reviewing'
             const isDone = item?.status === 'done'
             const isError = item?.status === 'error'
+            const isPending = !item || item.status === 'pending'
+            const borderColor = AGENT_COLORS[agent.color]
 
             return (
               <div
                 key={agent.id}
-                className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
-                style={{ borderLeftColor: AGENT_COLORS[agent.color], borderLeftWidth: '3px' }}
+                className={cn(
+                  'rounded-xl border bg-white p-5 shadow-sm transition-all duration-500',
+                  isDone ? 'border-emerald-200' : isError ? 'border-red-200' : 'border-gray-200'
+                )}
+                style={{ borderLeftColor: isDone ? '#22C55E' : isError ? '#EF4444' : borderColor, borderLeftWidth: '3px' }}
               >
                 <div className="mb-3 flex items-center gap-3">
                   <div
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-xl"
-                    style={{ backgroundColor: `${AGENT_COLORS[agent.color]}15` }}
+                    className={cn(
+                      'flex h-10 w-10 items-center justify-center rounded-full text-xl transition-all',
+                      isDone && 'scale-110'
+                    )}
+                    style={{ backgroundColor: `${borderColor}15` }}
                   >
                     {agent.avatar || agent.name[0]}
                   </div>
@@ -202,18 +308,28 @@ export default function ReviewCreatePage() {
                     <h3 className="text-sm font-semibold text-gray-900">{agent.name}</h3>
                     <p className="text-xs text-gray-500">{agent.tagline}</p>
                   </div>
+                  {isPending && (
+                    <span className="text-xs text-gray-400 bg-gray-50 rounded-full px-2.5 py-1">等待中</span>
+                  )}
                   {isReviewing && <Loader2 className="h-5 w-5 animate-spin text-primary-500" />}
                   {isDone && <Check className="h-5 w-5 text-emerald-500" />}
-                  {isError && <span className="text-xs text-red-500">生成失败</span>}
+                  {isError && <span className="text-xs text-red-500 font-medium">生成失败</span>}
                 </div>
 
-                {isReviewing && item.text && (
-                  <div className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
-                    {item.text.slice(-500)}
+                {isReviewing && (
+                  <DimensionProgress
+                    completed={item?.dimensionsCompleted || 0}
+                  />
+                )}
+
+                {isDone && (
+                  <div className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span>评审完成，正在等待其他角色...</span>
                   </div>
                 )}
 
-                {isError && item.text && (
+                {isError && item?.text && (
                   <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-xs text-red-700">
                     {item.text}
                   </div>
