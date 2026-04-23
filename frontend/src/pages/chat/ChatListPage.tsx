@@ -11,7 +11,7 @@ import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { createId } from '@/utils/id'
 import { formatTimeAgo } from '@/utils/format'
-import type { ChatRoom } from '@/types'
+import type { ChatRoom, DiscussionMode } from '@/types'
 
 export default function ChatListPage() {
   const navigate = useNavigate()
@@ -31,6 +31,7 @@ export default function ChatListPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newTopic, setNewTopic] = useState('')
   const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([])
+  const [discussionMode, setDiscussionMode] = useState<DiscussionMode>('free')
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ChatRoom | null>(null)
   const handledReviewRef = useRef<string | null>(null)
@@ -90,6 +91,7 @@ export default function ChatListPage() {
     }
     setNewTopic('')
     setSelectedAgentIds([])
+    setDiscussionMode('free')
     setShowCreateModal(true)
   }
 
@@ -106,6 +108,7 @@ export default function ChatListPage() {
     }
     const participants = agents.filter((a) => selectedAgentIds.includes(a.id))
     const topic = newTopic.trim() || '自由讨论'
+    const modeLabel = discussionMode === 'debate' ? '辩论' : discussionMode === 'moderated' ? '引导' : '自由'
     const room: ChatRoom = {
       id: createId(),
       document_id: '',
@@ -113,6 +116,7 @@ export default function ChatListPage() {
       topic,
       status: 'active',
       participants,
+      discussionMode,
       created_at: new Date().toISOString(),
     }
     createRoom(room)
@@ -122,7 +126,7 @@ export default function ChatListPage() {
       sender_type: 'agent',
       sender_id: 'system',
       sender_name: '系统',
-      content: `讨论群已建好。${participants.map((a) => `${a.avatar || ''} ${a.name}`).join('、')} 已加入，大家正在热身中...`,
+      content: `讨论群已建好（${modeLabel}讨论模式）。${participants.map((a) => `${a.avatar || ''} ${a.name}`).join('、')} 已加入，大家正在热身中...`,
       created_at: new Date().toISOString(),
     })
     setShowCreateModal(false)
@@ -211,7 +215,17 @@ export default function ChatListPage() {
                 <div className="relative z-10 pointer-events-none">
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <h3 className="text-base font-semibold text-gray-900">{room.topic}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-semibold text-gray-900">{room.topic}</h3>
+                        {room.discussionMode && room.discussionMode !== 'free' && (
+                          <span className={cn(
+                            'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                            room.discussionMode === 'debate' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                          )}>
+                            {room.discussionMode === 'debate' ? '辩论' : '引导'}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-500 mt-0.5">
                         {roomMessages.length} 条消息
                       </p>
@@ -327,6 +341,31 @@ export default function ChatListPage() {
                   placeholder="例如：关于方案可行性的讨论"
                   className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">讨论模式</label>
+                <div className="flex gap-2">
+                  {([
+                    { value: 'free' as DiscussionMode, label: '💬 自由讨论', desc: '自然发言' },
+                    { value: 'moderated' as DiscussionMode, label: '📋 引导式', desc: '围绕主题' },
+                    { value: 'debate' as DiscussionMode, label: '⚔️ 辩论', desc: '观点对抗' },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setDiscussionMode(opt.value)}
+                      className={cn(
+                        'flex-1 rounded-lg border p-2 text-center text-xs transition-colors cursor-pointer',
+                        discussionMode === opt.value
+                          ? 'border-primary-500 bg-primary-50 text-primary-700'
+                          : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                      )}
+                    >
+                      <div className="font-medium">{opt.label}</div>
+                      <div className="text-[10px] mt-0.5 opacity-70">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>

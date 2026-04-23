@@ -151,6 +151,8 @@ export interface Controversy {
   opinions: { agent_name: string; agent_color: AgentColor; stance: string }[]
 }
 
+export type DiscussionMode = 'free' | 'moderated' | 'debate'
+
 export interface ChatRoom {
   id: string
   document_id: string
@@ -159,7 +161,28 @@ export interface ChatRoom {
   topic: string
   status: 'active' | 'closed'
   participants: Agent[]
+  discussionMode?: DiscussionMode
+  topicTags?: string[]
+  stats?: {
+    messageCount: number
+    lastActiveAt?: string
+    bookmarkCount?: number
+  }
   created_at: string
+}
+
+export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'failed'
+
+export interface ChatMessageReaction {
+  emoji: string
+  userReacted: boolean
+  agentIds: string[]
+}
+
+export interface ChatMessageAttachment {
+  documentId: string
+  title: string
+  fileType: string
 }
 
 export interface ChatMessage {
@@ -172,8 +195,50 @@ export interface ChatMessage {
   content: string
   quotes?: { text: string; section: string }[]
   reply_to?: string
+  replyToMessage?: { senderName: string; content: string }
   target_agent_id?: string
+  attachment?: ChatMessageAttachment
+  reactions?: ChatMessageReaction[]
+  status?: MessageStatus
   created_at: string
+}
+
+export interface ChatPoll {
+  id: string
+  roomId: string
+  question: string
+  options: { id: string; text: string; voterIds: string[] }[]
+  createdBy: string
+  createdAt: string
+  closedAt?: string
+}
+
+export interface Bookmark {
+  id: string
+  roomId: string
+  messageId: string
+  note?: string
+  createdAt: string
+}
+
+export interface DiscussionSummary {
+  id: string
+  roomId: string
+  keyPoints: string[]
+  agreements: string[]
+  disagreements: string[]
+  actionItems: string[]
+  generatedAt: string
+}
+
+export type RoleEventType = 'challenge' | 'support' | 'question' | 'tangent' | 'summarize' | 'escalate'
+
+export interface RoleEvent {
+  type: RoleEventType
+  triggeredBy: string
+  targetAgentId?: string
+  content: string
+  probability: number
 }
 
 export type ProviderMode = 'official' | 'third-party' | 'local'

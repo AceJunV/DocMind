@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Send, UserPlus, FileText, MessageCircle, X, Trash2 } from 'lucide-react'
+import { TypingIndicator } from '@/components/ui/TypingIndicator'
 import { AGENT_COLORS, useAgentStore } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useDocumentStore } from '@/stores/documentStore'
@@ -44,6 +45,7 @@ export default function ChatRoomPage() {
 
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [typingAgentIds, setTypingAgentIds] = useState<string[]>([])
   const [showDoc, setShowDoc] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -232,17 +234,17 @@ export default function ChatRoomPage() {
     }))
 
     if (targetAgent) {
-      // Specific agent addressed
+      setTypingAgentIds([targetAgent.id])
       const reply = await getAgentReply(
         targetAgent,
         [...contextHistory, { role: 'user', content: cleanText }],
         controller.signal,
       )
+      setTypingAgentIds([])
       if (reply && !controller.signal.aborted) {
         addAgentMsg(targetAgent, reply)
       }
     } else {
-      // Multi-agent round-robin: pick 1-3 agents to reply
       const numResponders = Math.min(participants.length, Math.random() > 0.4 ? 2 : (participants.length >= 3 ? 3 : participants.length))
       const shuffled = [...participants].sort(() => Math.random() - 0.5)
       const responders = shuffled.slice(0, numResponders)
@@ -253,6 +255,7 @@ export default function ChatRoomPage() {
         const agent = responders[i]
         if (controller.signal.aborted) break
 
+        setTypingAgentIds([agent.id])
         if (i > 0) await randomDelay(1200, 3000)
 
         const reply = await getAgentReply(
@@ -261,6 +264,7 @@ export default function ChatRoomPage() {
           controller.signal,
         )
 
+        setTypingAgentIds([])
         if (reply && !controller.signal.aborted) {
           addAgentMsg(agent, reply)
           runningContext.push({ role: 'assistant' as const, content: `[${agent.name}]: ${reply}` })
@@ -494,16 +498,11 @@ export default function ChatRoomPage() {
             })}
 
             {loading && (
-              <div className="flex justify-start">
-                <div className="flex items-center gap-2 rounded-xl bg-gray-50 px-4 py-3">
-                  <div className="flex gap-1">
-                    <span className="h-2 w-2 rounded-full bg-gray-400 animate-pulse-dot" />
-                    <span className="h-2 w-2 rounded-full bg-gray-400 animate-pulse-dot" style={{ animationDelay: '0.2s' }} />
-                    <span className="h-2 w-2 rounded-full bg-gray-400 animate-pulse-dot" style={{ animationDelay: '0.4s' }} />
-                  </div>
-                  <span className="text-xs text-gray-500">正在讨论中...</span>
-                </div>
-              </div>
+              <TypingIndicator
+                agents={typingAgentIds.length > 0
+                  ? participants.filter((p) => typingAgentIds.includes(p.id))
+                  : participants.slice(0, 1)}
+              />
             )}
           </div>
 
