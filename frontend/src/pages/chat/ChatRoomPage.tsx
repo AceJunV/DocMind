@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, UserPlus, FileText, MessageCircle, X, Trash2, Reply, Check, CheckCheck, AlertCircle, Loader2 } from 'lucide-react'
+import { ArrowLeft, Send, UserPlus, FileText, MessageCircle, X, Trash2, Reply, Check, CheckCheck, AlertCircle, Loader2, Search, BookmarkIcon } from 'lucide-react'
 import { TypingIndicator } from '@/components/ui/TypingIndicator'
 import { SlashCommandMenu } from '@/components/chat/SlashCommandMenu'
 import { ChatToolbar } from '@/components/chat/ChatToolbar'
 import { DocumentPicker } from '@/components/chat/DocumentPicker'
 import { EmojiReactionBar } from '@/components/chat/EmojiReactionBar'
 import { ChatRoomStatusBar } from '@/components/chat/ChatRoomStatusBar'
+import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel'
+import { BookmarkPanel, exportBookmarksAsMarkdown } from '@/components/chat/BookmarkPanel'
+import { DiscussionSummaryCard } from '@/components/chat/DiscussionSummaryCard'
 import { AGENT_COLORS, useAgentStore } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useDocumentStore } from '@/stores/documentStore'
@@ -46,6 +49,10 @@ export default function ChatRoomPage() {
   const addBookmarkFn = useChatStore((s) => s.addBookmark)
   const addReaction = useChatStore((s) => s.addReaction)
   const removeReaction = useChatStore((s) => s.removeReaction)
+  const removeBookmarkFn = useChatStore((s) => s.removeBookmark)
+  const bookmarks = useChatStore((s) => s.bookmarks).filter((b) => b.roomId === id)
+  const summaries = useChatStore((s) => s.summaries).filter((s) => s.roomId === id)
+  const addSummary = useChatStore((s) => s.addSummary)
   const allAgents = useAgentStore((s) => s.agents)
   const allDocuments = useDocumentStore((s) => s.documents)
   const doc = useMemo(() => room?.document_id ? allDocuments.find((d) => d.id === room.document_id) : null, [allDocuments, room])
@@ -64,6 +71,10 @@ export default function ChatRoomPage() {
   const [slashQuery, setSlashQuery] = useState<string | null>(null)
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [pendingAttachment, setPendingAttachment] = useState<ChatMessageAttachment | null>(null)
+  const [showSearch, setShowSearch] = useState(false)
+  const [showBookmarks, setShowBookmarks] = useState(false)
+  const [showSummary, setShowSummary] = useState(false)
+  const [summaryLoading, setSummaryLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -227,7 +238,8 @@ export default function ChatRoomPage() {
         toast('info', '请在消息中描述投票问题，功能开发中')
         break
       case 'summary':
-        toast('info', '讨论总结功能开发中')
+        setShowSummary(true)
+        handleGenerateSummary()
         break
       case 'collect': {
         const lastMsg = [...messages].reverse().find((m) => m.sender_type === 'agent' && m.sender_id !== 'system')
@@ -256,6 +268,69 @@ export default function ChatRoomPage() {
       addReaction(id, messageId, emoji, true)
     }
   }, [id, messages, addReaction, removeReaction])
+
+  const handleGenerateSummary = useCallback(async () => {
+    if (!id || !hasValidConfig) { toast('error', '请先配置 API Key'); return }
+    setSummaryLoading(true)
+    const agentMsgs = messages.filter((m) => m.sender_type === 'agent' && m.sender_id !== 'system')
+    const digest = agentMsgs.slice(-20).map((m) => `[${m.sender_name}]: ${m.content}`).join('\n')
+
+    try {
+      let fullText = ''
+      await new Promise<string>((resolve) => {
+        chatCompletion(
+          [
+            { role: 'system', content: '你是一个讨论总结助手。请根据以下聊天记录生成一个结构化总结。返回 JSON 格式：{"keyPoints":["..."],"agreements":["..."],"disagreements":["..."],"actionItems":["..."]}。每个数组包含 1-5 条。只返回 JSON，不要其他内容。' },
+            { role: 'user', content: `以下是聊天记录：\n\n${digest}` },
+          ],
+          {
+            onChunk: (chunk) => { fullText += chunk },
+            onDone: (text) => resolve(text),
+            onError: () => resolve(fullText),
+          },
+        ).catch(() => resolve(fullText))
+      })
+
+      const jsonMatch = fullText.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0])
+        addSummary({
+          id: createId(),
+          roomId: id,
+          keyPoints: parsed.keyPoints || [],
+          agreements: parsed.agreements || [],
+          disagreements: parsed.disagreements || [],
+          actionItems: parsed.actionItems || [],
+          generatedAt: new Date().toISOString(),
+        })
+      }
+    } catch {
+      toast('error', '总结生成失败')
+    }
+    setSummaryLoading(false)
+  }, [id, messages, hasValidConfig, addSummary])
+
+  const handleExportBookmarks = useCallback(() => {
+    if (!room) return
+    const md = exportBookmarksAsMarkdown(bookmarks, messages, room.topic)
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `收藏-${room.topic}.md`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast('success', '已导出收藏')
+  }, [bookmarks, messages, room])
+
+  const handleJumpToMessage = useCallback((messageId: string) => {
+    const el = scrollRef.current?.querySelector(`[data-msg-id="${messageId}"]`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('ring-2', 'ring-primary-400')
+      setTimeout(() => el.classList.remove('ring-2', 'ring-primary-400'), 2000)
+    }
+  }, [])
 
   const handleDocAttach = useCallback((doc: { id: string; title: string; file_type: string }) => {
     setPendingAttachment({ documentId: doc.id, title: doc.title, fileType: doc.file_type })
@@ -408,6 +483,21 @@ export default function ChatRoomPage() {
         </Link>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowSearch(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 cursor-pointer bg-white"
+            title="搜索聊天记录"
+          >
+            <Search className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => setShowBookmarks(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 cursor-pointer bg-white"
+            title="收藏的观点"
+          >
+            <BookmarkIcon className="h-3.5 w-3.5" />
+            {bookmarks.length > 0 && <span className="text-[10px] text-primary-600">{bookmarks.length}</span>}
+          </button>
+          <button
             onClick={() => setShowInvite(true)}
             className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 cursor-pointer bg-white"
           >
@@ -517,7 +607,7 @@ export default function ChatRoomPage() {
           </div>
         )}
 
-        <div className="flex-1 rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col min-w-0">
+        <div className="flex-1 rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col min-w-0 relative">
           <div className="border-b border-gray-100 px-5 py-3 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-gray-900">{room.topic}</h3>
@@ -568,7 +658,7 @@ export default function ChatRoomPage() {
 
               if (msg.sender_type === 'user') {
                 return (
-                  <div key={msg.id} className="flex justify-end">
+                  <div key={msg.id} data-msg-id={msg.id} className="flex justify-end transition-all">
                     <div className="max-w-[70%]">
                       {replyQuote}
                       <div className="rounded-xl rounded-tr-sm bg-gray-100 px-4 py-2.5 text-sm text-gray-700 whitespace-pre-wrap">
@@ -588,14 +678,14 @@ export default function ChatRoomPage() {
 
               if (!msg.sender_color) {
                 return (
-                  <div key={msg.id} className="rounded-xl bg-primary-50 border border-primary-100 px-4 py-3 text-sm text-gray-600 whitespace-pre-wrap text-center">
+                  <div key={msg.id} data-msg-id={msg.id} className="rounded-xl bg-primary-50 border border-primary-100 px-4 py-3 text-sm text-gray-600 whitespace-pre-wrap text-center transition-all">
                     {msg.content}
                   </div>
                 )
               }
 
               return (
-                <div key={msg.id} className="group flex justify-start">
+                <div key={msg.id} data-msg-id={msg.id} className="group flex justify-start transition-all">
                   <div className="max-w-[75%]">
                     <div className="flex items-center gap-1.5 mb-1">
                       <div
@@ -723,7 +813,7 @@ export default function ChatRoomPage() {
                   }}
                   onDoc={() => setShowDocPicker(true)}
                   onVote={() => toast('info', '投票功能开发中')}
-                  onSummary={() => toast('info', '总结功能开发中')}
+                  onSummary={() => { setShowSummary(true); handleGenerateSummary() }}
                   onBookmark={() => {
                     const last = [...messages].reverse().find((m) => m.sender_type === 'agent' && m.sender_id !== 'system')
                     if (last && id) {
@@ -780,6 +870,34 @@ export default function ChatRoomPage() {
               </div>
             )}
           </div>
+
+          {showSearch && (
+            <ChatSearchPanel
+              messages={messages}
+              participants={participants}
+              onClose={() => setShowSearch(false)}
+              onJumpToMessage={handleJumpToMessage}
+            />
+          )}
+
+          {showBookmarks && (
+            <BookmarkPanel
+              bookmarks={bookmarks}
+              messages={messages}
+              onRemove={(bid) => removeBookmarkFn(bid)}
+              onExport={handleExportBookmarks}
+              onClose={() => setShowBookmarks(false)}
+            />
+          )}
+
+          {showSummary && (
+            <DiscussionSummaryCard
+              summary={summaries[summaries.length - 1] || null}
+              loading={summaryLoading}
+              onGenerate={handleGenerateSummary}
+              onClose={() => setShowSummary(false)}
+            />
+          )}
         </div>
       </div>
 
