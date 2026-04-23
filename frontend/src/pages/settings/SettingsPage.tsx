@@ -32,12 +32,6 @@ import type { ModelConfig, ProviderMode, SavedModelProfile } from '@/types'
 
 type FormValues = ModelConfig & { profileName: string }
 
-const PROVIDER_ICONS: Record<ProviderMode, typeof Globe> = {
-  official: Globe,
-  'third-party': Server,
-  local: Server,
-}
-
 const CAPABILITY_LABELS: Record<string, { label: string; color: string }> = {
   'text-only': { label: '纯文本', color: 'bg-gray-100 text-gray-600' },
   'vision': { label: '视觉理解', color: 'bg-blue-50 text-blue-600' },
@@ -114,30 +108,6 @@ export default function SettingsPage() {
     ).slice(0, 12)
   }, [form.model])
 
-  useEffect(() => {
-    if (profiles.length === 0) {
-      startCreate()
-      return
-    }
-    const active = activeProfileId
-      ? profiles.find((p) => p.id === activeProfileId)
-      : null
-    if (active) {
-      selectProfile(active)
-    } else {
-      selectProfile(profiles[0])
-    }
-  }, [])
-
-  const updateField = <K extends keyof FormValues>(key: K, value: FormValues[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }))
-    setErrors((prev) => {
-      const next = { ...prev }
-      delete next[key]
-      return next
-    })
-  }
-
   const startCreate = useCallback(() => {
     setSelectedId(null)
     setIsCreating(true)
@@ -154,6 +124,30 @@ export default function SettingsPage() {
     })
     setErrors({})
   }, [])
+
+  useEffect(() => {
+    if (profiles.length === 0) {
+      startCreate()
+      return
+    }
+    const active = activeProfileId
+      ? profiles.find((p) => p.id === activeProfileId)
+      : null
+    if (active) {
+      selectProfile(active)
+    } else {
+      selectProfile(profiles[0])
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const updateField = <K extends keyof FormValues>(key: K, value: FormValues[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }))
+    setErrors((prev) => {
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {}

@@ -38,6 +38,12 @@ export function Header() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const prevPathnameRef = useRef(location.pathname)
+
+  if (location.pathname !== prevPathnameRef.current) {
+    prevPathnameRef.current = location.pathname
+    if (mobileNavOpen) setMobileNavOpen(false)
+  }
 
   const openSearch = useCallback(() => setSearchOpen(true), [])
   const closeSearch = useCallback(() => setSearchOpen(false), [])
@@ -55,10 +61,6 @@ export function Header() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
-
-  useEffect(() => {
-    setMobileNavOpen(false)
-  }, [location.pathname])
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {

@@ -11,6 +11,7 @@ interface ToastItem {
 
 let addToastFn: ((toast: Omit<ToastItem, 'id'>) => void) | null = null
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function toast(type: ToastItem['type'], message: string) {
   addToastFn?.({ type, message })
 }

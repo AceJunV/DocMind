@@ -67,17 +67,24 @@ export function CommandPalette({ open, onClose }: Props) {
     ).slice(0, 12)
   }, [query, allCommands])
 
+  const prevOpenRef = useRef(open)
+  if (open && !prevOpenRef.current) {
+    setQuery('')
+    setActiveIndex(0)
+  }
+  prevOpenRef.current = open
+
+  const prevQueryRef = useRef(query)
+  if (query !== prevQueryRef.current) {
+    prevQueryRef.current = query
+    setActiveIndex(0)
+  }
+
   useEffect(() => {
     if (open) {
-      setQuery('')
-      setActiveIndex(0)
       setTimeout(() => inputRef.current?.focus(), 50)
     }
   }, [open])
-
-  useEffect(() => {
-    setActiveIndex(0)
-  }, [query])
 
   useEffect(() => {
     if (!open) return

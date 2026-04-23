@@ -5,7 +5,7 @@ import { AGENT_COLORS, useAgentStore } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useDocumentStore } from '@/stores/documentStore'
 import { useAuthStore } from '@/stores/authStore'
-import { chatCompletion, LLMError } from '@/services/llmService'
+import { chatCompletion } from '@/services/llmService'
 import { isModelConfigValid, useSettingsStore } from '@/stores/settingsStore'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -38,7 +38,7 @@ export default function ChatRoomPage() {
   const removeRoom = useChatStore((s) => s.removeRoom)
   const allAgents = useAgentStore((s) => s.agents)
   const allDocuments = useDocumentStore((s) => s.documents)
-  const doc = useMemo(() => room?.document_id ? allDocuments.find((d) => d.id === room.document_id) : null, [allDocuments, room?.document_id])
+  const doc = useMemo(() => room?.document_id ? allDocuments.find((d) => d.id === room.document_id) : null, [allDocuments, room])
   const config = useSettingsStore((s) => s.currentConfig)
   const hasValidConfig = isModelConfigValid(config)
 
@@ -253,13 +253,6 @@ export default function ChatRoomPage() {
         if (controller.signal.aborted) break
 
         if (i > 0) await randomDelay(1200, 3000)
-
-        let agentPrompt: string
-        if (i === 0) {
-          agentPrompt = cleanText
-        } else {
-          agentPrompt = `用户说了：${cleanText}\n\n前面有人回复了。现在轮到你说话——如果你有不同看法就直接说，别重复别人的话。简短回复。`
-        }
 
         const reply = await getAgentReply(
           agent,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText, Bot, ClipboardCheck, MessageCircle, ArrowRight, X, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -47,12 +47,7 @@ const STORAGE_KEY = 'docmind-onboarding-completed'
 export function OnboardingGuide() {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
-  const [visible, setVisible] = useState(false)
-
-  useEffect(() => {
-    const completed = localStorage.getItem(STORAGE_KEY)
-    if (!completed) setVisible(true)
-  }, [])
+  const [visible, setVisible] = useState(() => !localStorage.getItem(STORAGE_KEY))
 
   const handleComplete = () => {
     localStorage.setItem(STORAGE_KEY, 'true')

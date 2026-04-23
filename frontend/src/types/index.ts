@@ -122,7 +122,9 @@ export interface AgentReview {
   agent_color: AgentColor
   score: number
   opinion: string
-  dimensions: { name: string; score: number }[]
+  status?: 'completed' | 'failed'
+  error_message?: string
+  dimensions: { name: string; score: number; comment?: string }[]
   suggestions: Suggestion[]
 }
 
