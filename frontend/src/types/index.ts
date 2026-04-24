@@ -132,6 +132,7 @@ export interface AgentReview {
 
 export interface Suggestion {
   id: string
+  title?: string
   content: string
   priority: 'high' | 'medium' | 'low'
   adopted: boolean
@@ -141,6 +142,9 @@ export interface Suggestion {
 }
 
 export interface ReviewSummary {
+  overview?: string
+  strengths?: string[]
+  pain_points?: string[]
   consensus: string[]
   controversies: Controversy[]
   top_suggestions: Suggestion[]
@@ -152,6 +156,15 @@ export interface Controversy {
 }
 
 export type DiscussionMode = 'free' | 'moderated' | 'debate'
+export type DiscussionState = 'idle' | 'kickoff' | 'discussing' | 'summarizing' | 'closed'
+
+export interface ChatAgendaItem {
+  id: string
+  text: string
+  source: 'document' | 'review' | 'user'
+  priority: number
+  status: 'pending' | 'active' | 'done'
+}
 
 export interface ChatRoom {
   id: string
@@ -162,6 +175,9 @@ export interface ChatRoom {
   status: 'active' | 'closed'
   participants: Agent[]
   discussionMode?: DiscussionMode
+  discussionState?: DiscussionState
+  currentTopicId?: string
+  pendingTopics?: ChatAgendaItem[]
   topicTags?: string[]
   stats?: {
     messageCount: number
