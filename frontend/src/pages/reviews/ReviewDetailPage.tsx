@@ -59,6 +59,67 @@ export default function ReviewDetailPage() {
   const navigate = useNavigate()
   const review = useReviewStore((state) => state.reviews.find((item) => item.id === id))
   const toggleSuggestionAdopted = useReviewStore((state) => state.toggleSuggestionAdopted)
+  const agentReviews = useMemo(() => review?.agent_reviews || [], [review?.agent_reviews])
+  const completedReviews = useMemo(
+    () => agentReviews.filter((item) => item.status !== 'failed'),
+    [agentReviews],
+  )
+  const failedReviews = useMemo(
+    () => agentReviews.filter((item) => item.status === 'failed'),
+    [agentReviews],
+  )
+  const reviewAgents = review?.agents
+  const teacherReviews = useMemo(
+    () => completedReviews.filter((item) => {
+      const agent = reviewAgents?.find((candidate) => candidate.id === item.agent_id)
+      return !agent?.category || agent.category === 'teacher'
+    }),
+    [completedReviews, reviewAgents],
+  )
+  const studentReviews = useMemo(
+    () => completedReviews.filter((item) => {
+      const agent = reviewAgents?.find((candidate) => candidate.id === item.agent_id)
+      return agent?.category === 'student'
+    }),
+    [completedReviews, reviewAgents],
+  )
+  const parentReviews = useMemo(
+    () => completedReviews.filter((item) => {
+      const agent = reviewAgents?.find((candidate) => candidate.id === item.agent_id)
+      return agent?.category === 'parent'
+    }),
+    [completedReviews, reviewAgents],
+  )
+  const radarDatasets = useMemo(
+    () =>
+      completedReviews.map((item) => {
+        const dimensionMap = new Map(item.dimensions.map((dimension) => [dimension.name, dimension.score]))
+        return {
+          label: item.agent_name,
+          color: item.agent_color,
+          scores: TEACHING_DIMENSIONS.map((dimension) => dimensionMap.get(dimension) || 0),
+        }
+      }),
+    [completedReviews],
+  )
+  const avgDimScores = useMemo(
+    () =>
+      TEACHING_DIMENSIONS.map((dimension) => {
+        const scores = completedReviews.map((item) => item.dimensions.find((entry) => entry.name === dimension)?.score || 0)
+
+        if (!scores.length) {
+          return { name: dimension, avg: 0, min: 0, max: 0 }
+        }
+
+        return {
+          name: dimension,
+          avg: scores.reduce((sum, score) => sum + score, 0) / scores.length,
+          min: Math.min(...scores),
+          max: Math.max(...scores),
+        }
+      }),
+    [completedReviews],
+  )
 
   if (!review) {
     return (
@@ -101,9 +162,6 @@ export default function ReviewDetailPage() {
     )
   }
 
-  const agentReviews = review.agent_reviews || []
-  const completedReviews = agentReviews.filter((item) => item.status !== 'failed')
-  const failedReviews = agentReviews.filter((item) => item.status === 'failed')
   const summary = review.summary
   const consensus = summary?.consensus || []
   const controversies = summary?.controversies || []
@@ -112,51 +170,6 @@ export default function ReviewDetailPage() {
   const prioritySuggestions = dedupeSuggestions(summary?.top_suggestions?.length ? summary.top_suggestions : allSuggestions).slice(0, 10)
   const strengths = (summary?.strengths || []).slice(0, 4)
   const painPoints = (summary?.pain_points || []).slice(0, 4)
-
-  const teacherReviews = completedReviews.filter((item) => {
-    const agent = review.agents?.find((candidate) => candidate.id === item.agent_id)
-    return !agent?.category || agent.category === 'teacher'
-  })
-  const studentReviews = completedReviews.filter((item) => {
-    const agent = review.agents?.find((candidate) => candidate.id === item.agent_id)
-    return agent?.category === 'student'
-  })
-  const parentReviews = completedReviews.filter((item) => {
-    const agent = review.agents?.find((candidate) => candidate.id === item.agent_id)
-    return agent?.category === 'parent'
-  })
-
-  const radarDatasets = useMemo(
-    () =>
-      completedReviews.map((item) => {
-        const dimensionMap = new Map(item.dimensions.map((dimension) => [dimension.name, dimension.score]))
-        return {
-          label: item.agent_name,
-          color: item.agent_color,
-          scores: TEACHING_DIMENSIONS.map((dimension) => dimensionMap.get(dimension) || 0),
-        }
-      }),
-    [completedReviews]
-  )
-
-  const avgDimScores = useMemo(
-    () =>
-      TEACHING_DIMENSIONS.map((dimension) => {
-        const scores = completedReviews.map((item) => item.dimensions.find((entry) => entry.name === dimension)?.score || 0)
-
-        if (!scores.length) {
-          return { name: dimension, avg: 0, min: 0, max: 0 }
-        }
-
-        return {
-          name: dimension,
-          avg: scores.reduce((sum, score) => sum + score, 0) / scores.length,
-          min: Math.min(...scores),
-          max: Math.max(...scores),
-        }
-      }),
-    [completedReviews]
-  )
 
   const buildReportMarkdown = () => {
     const lines = [
