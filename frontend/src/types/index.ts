@@ -332,6 +332,27 @@ export interface RoleEvent {
 
 export type ProviderMode = 'official' | 'third-party' | 'local'
 
+// 文件对比评审类型
+export type DiffType = 'add' | 'delete' | 'equal'
+
+export interface DiffPoint {
+  type: DiffType
+  text: string
+}
+
+export interface DiffResult {
+  oldFileName: string
+  newFileName: string
+  points: DiffPoint[]
+  stats: {
+    additions: number
+    deletions: number
+    equalLines: number
+  }
+}
+
+export type ReviewMode = 'single' | 'compare'
+
 export interface ModelConfig {
   providerMode: ProviderMode
   model: string

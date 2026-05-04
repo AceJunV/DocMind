@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   FileText,
+  GitCompare,
   Loader2,
   Play,
   Sparkles,
@@ -20,7 +21,9 @@ import { isModelConfigValid, useSettingsStore } from '@/stores/settingsStore'
 import { createFailedAgentReview, executeAgentReview, generateSummary } from '@/services/reviewEngine'
 import { toast } from '@/components/ui/Toast'
 import { createId } from '@/utils/id'
-import type { Agent, AgentReview, Review, TeachingDimension } from '@/types'
+import type { Agent, AgentReview, DiffResult, Review, ReviewMode, TeachingDimension } from '@/types'
+import { computeDiff } from '@/services/compareService'
+import { DiffViewer } from '@/components/reviews/DiffViewer'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
@@ -425,6 +428,10 @@ export default function ReviewCreatePage() {
   const [selectedDocId, setSelectedDocId] = useState(autoSelectedDocId)
   const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([])
   const [phase, setPhase] = useState<'config' | 'running' | 'done'>('config')
+  const [reviewMode, setReviewMode] = useState<ReviewMode>('single')
+  const [oldDocId, setOldDocId] = useState('')
+  const [newDocId, setNewDocId] = useState('')
+  const [diffResult, setDiffResult] = useState<DiffResult | null>(null)
   const [progress, setProgress] = useState<Record<string, ReviewProgressItem>>({})
   const [reviewId, setReviewId] = useState('')
   const [runningStartedAt, setRunningStartedAt] = useState<number | null>(null)
@@ -483,10 +490,15 @@ export default function ReviewCreatePage() {
     })
   }
 
-  const canStart = Boolean(selectedDocId && selectedAgentIds.length > 0 && hasValidConfig)
+  const compareDoc = documents.find((d) => d.id === newDocId)
+  const canStart = reviewMode === 'compare'
+    ? Boolean(oldDocId && newDocId && diffResult && selectedAgentIds.length > 0 && hasValidConfig && compareDoc)
+    : Boolean(selectedDocId && selectedAgentIds.length > 0 && hasValidConfig)
 
   const handleStart = async () => {
-    if (!canStart || !selectedDoc) return
+    const activeDoc = reviewMode === 'compare' ? compareDoc : selectedDoc
+    const activeDocId = reviewMode === 'compare' ? newDocId : selectedDocId
+    if (!canStart || !activeDoc) return
 
     setPhase('running')
     setRunningStartedAt(getTimestampMs())
@@ -495,13 +507,13 @@ export default function ReviewCreatePage() {
 
     const review: Review = {
       id: createId(),
-      document_id: selectedDocId,
+      document_id: activeDocId,
       owner_id: user?.id || '',
       status: 'in_progress',
       created_at: new Date().toISOString(),
       agent_reviews: [],
       agents: selectedAgents,
-      document: selectedDoc,
+      document: activeDoc,
     }
 
     addReview(review)
@@ -537,7 +549,7 @@ export default function ReviewCreatePage() {
       try {
         const result = await executeAgentReview(
           agent,
-          selectedDoc,
+          activeDoc,
           (text) =>
             setProgress((previous) => ({
               ...previous,
@@ -598,7 +610,7 @@ export default function ReviewCreatePage() {
       agent_reviews: finalResults,
       summary,
     })
-    incrementReviewCount(selectedDocId)
+    incrementReviewCount(activeDocId)
     setPhase('done')
 
     if (successfulResults.length === finalResults.length) {
@@ -849,7 +861,132 @@ export default function ReviewCreatePage() {
         </div>
       ) : null}
 
+      <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 p-1.5 w-fit">
+        <button
+          onClick={() => { setReviewMode('single'); setDiffResult(null) }}
+          className={cn(
+            'flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors',
+            reviewMode === 'single'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          )}
+        >
+          <FileText className="h-4 w-4" />
+          单文档评审
+        </button>
+        <button
+          onClick={() => setReviewMode('compare')}
+          className={cn(
+            'flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors',
+            reviewMode === 'compare'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          )}
+        >
+          <GitCompare className="h-4 w-4" />
+          对比评审
+        </button>
+      </div>
+
+      {reviewMode === 'compare' && (
+        <Card className="rounded-[28px]">
+          <CardHeader>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">Step 1</p>
+              <h2 className="mt-2 text-lg font-semibold text-gray-900">选择对比文件</h2>
+              <p className="mt-1 text-sm text-gray-500">选择修改前（旧）和修改后（新）两份文档进行对比评审</p>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <p className="mb-2 text-sm font-medium text-gray-700">修改前（旧版本）</p>
+                <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                  {documents.map((document) => (
+                    <button
+                      key={`old-${document.id}`}
+                      onClick={() => { setOldDocId(document.id); setDiffResult(null) }}
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition-colors',
+                        oldDocId === document.id
+                          ? 'border-orange-400 bg-orange-50'
+                          : 'border-gray-200 bg-white hover:bg-gray-50'
+                      )}
+                    >
+                      <FileText className={cn('h-4 w-4 shrink-0', oldDocId === document.id ? 'text-orange-500' : 'text-gray-400')} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-900">{document.title}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          {document.word_count?.toLocaleString() || 0} 字 · {document.file_type.toUpperCase()}
+                        </p>
+                      </div>
+                      {oldDocId === document.id ? <Check className="h-4 w-4 shrink-0 text-orange-500" /> : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-medium text-gray-700">修改后（新版本）</p>
+                <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                  {documents.map((document) => (
+                    <button
+                      key={`new-${document.id}`}
+                      onClick={() => { setNewDocId(document.id); setDiffResult(null) }}
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition-colors',
+                        newDocId === document.id
+                          ? 'border-emerald-400 bg-emerald-50'
+                          : 'border-gray-200 bg-white hover:bg-gray-50'
+                      )}
+                    >
+                      <FileText className={cn('h-4 w-4 shrink-0', newDocId === document.id ? 'text-emerald-500' : 'text-gray-400')} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-900">{document.title}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          {document.word_count?.toLocaleString() || 0} 字 · {document.file_type.toUpperCase()}
+                        </p>
+                      </div>
+                      {newDocId === document.id ? <Check className="h-4 w-4 shrink-0 text-emerald-500" /> : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {oldDocId && newDocId && (
+              <div className="mt-4">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    const oldDoc = documents.find((d) => d.id === oldDocId)
+                    const newDoc = documents.find((d) => d.id === newDocId)
+                    if (!oldDoc?.raw_content || !newDoc?.raw_content) {
+                      toast('error', '文档内容尚未解析完成，请稍后重试')
+                      return
+                    }
+                    setDiffResult(computeDiff(
+                      oldDoc.raw_content,
+                      newDoc.raw_content,
+                      oldDoc.title,
+                      newDoc.title,
+                    ))
+                  }}
+                >
+                  <GitCompare className="h-4 w-4" />
+                  对比差异
+                </Button>
+              </div>
+            )}
+            {diffResult && (
+              <div className="mt-4">
+                <DiffViewer result={diffResult} />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {reviewMode === 'single' && (
         <Card className="rounded-[28px]">
           <CardHeader>
             <div>
@@ -898,6 +1035,7 @@ export default function ReviewCreatePage() {
             )}
           </CardContent>
         </Card>
+        )}
 
         <Card className="rounded-[28px]">
           <CardHeader>
@@ -955,12 +1093,25 @@ export default function ReviewCreatePage() {
 
       <div className="flex items-center justify-between rounded-[24px] border border-gray-200 bg-white px-5 py-4 shadow-sm">
         <div className="text-sm text-gray-500">
-          <span className="font-medium text-gray-700">{selectedAgents.length}</span> 位角色将并行参与评审，
-          当前并发数设置为 <span className="font-medium text-gray-700">{config.maxConcurrentReviews ?? 1}</span>。
+          {reviewMode === 'compare' ? (
+            diffResult ? (
+              <span>
+                对比差异：<span className="font-medium text-emerald-600">+{diffResult.stats.additions}</span> 新增 / <span className="font-medium text-red-500">-{diffResult.stats.deletions}</span> 删除，
+                <span className="font-medium text-gray-700"> {selectedAgents.length}</span> 位角色参与评审
+              </span>
+            ) : (
+              '请先选择两个文件并点击「对比差异」'
+            )
+          ) : (
+            <span>
+              <span className="font-medium text-gray-700">{selectedAgents.length}</span> 位角色将并行参与评审，
+              当前并发数设置为 <span className="font-medium text-gray-700">{config.maxConcurrentReviews ?? 1}</span>。
+            </span>
+          )}
         </div>
         <Button onClick={handleStart} disabled={!canStart} size="lg">
           <Play className="h-4 w-4" />
-          开始评审
+          {reviewMode === 'compare' ? '开始对比评审' : '开始评审'}
         </Button>
       </div>
     </div>
