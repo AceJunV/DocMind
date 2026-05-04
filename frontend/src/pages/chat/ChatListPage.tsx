@@ -176,9 +176,11 @@ export default function ChatListPage() {
       sender_type: 'agent',
       sender_id: 'system',
       sender_name: '系统',
-      content: review
-        ? `讨论群已建好（${modeLabel}讨论模式）。${participants.map((a) => `${a.avatar || ''} ${a.name}`).join('、')} 已加入。\n角色们正在阅读评审报告，稍后会围绕共识、分歧和建议展开讨论。`
-        : `讨论群已建好（${modeLabel}讨论模式）。${participants.map((a) => `${a.avatar || ''} ${a.name}`).join('、')} 已加入，大家正在热身中...`,
+      content: discussionMode === 'free'
+        ? `聊天室已建好（${modeLabel}讨论模式）。${participants.map((a) => `${a.avatar || ''} ${a.name}`).join('、')} 已加入。\n你先说一句想聊什么，角色会优先接住你的话题。`
+        : review
+          ? `讨论群已建好（${modeLabel}讨论模式）。${participants.map((a) => `${a.avatar || ''} ${a.name}`).join('、')} 已加入。\n角色们正在阅读评审报告，稍后会围绕共识、分歧和建议展开讨论。`
+          : `讨论群已建好（${modeLabel}讨论模式）。${participants.map((a) => `${a.avatar || ''} ${a.name}`).join('、')} 已加入，大家正在热身中...`,
       created_at: new Date().toISOString(),
     })
     setShowCreateModal(false)

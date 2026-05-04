@@ -178,8 +178,15 @@ function buildChatSystemPrompt(
 - 需要有人阶段性收束，把共识和待确认点说清楚。`
       : `
 当前是自由讨论：
-- 像群聊一样自然发言，优先回应别人刚说过的话。
+- 用户当下的意图优先于既定议题。用户想闲聊、换话题或表达“不想讨论材料”时，停止推进文档/评审议题。
+- 像真人聊天一样先接住用户刚说的话，再用一句短问题把话轮交还给用户。
 - 不要重复别人的句式和结论。`
+
+  const responseGuide = mode === 'free'
+    ? `3. 用户主动问到文档、评审、课堂或建议时，再结合材料展开；否则不要强行把话题拉回材料。
+4. 回应要以角色身份自然说话，短、具体、有人味，不要自顾自开会。`
+    : `3. 不要泛泛而谈，要尽量落到教学设计、课堂执行、学生理解、评价反馈这些具体点上。
+4. 如果群里已经有文档或评审结论，就基于内容说话，不要再问“有没有文档”。`
 
   const toneGuide = getRoomToneGuide(strategy?.roomTone)
   const citationGuide = getCitationGuide(strategy?.citationPolicy)
@@ -199,8 +206,7 @@ ${docContext}
 记住：
 1. 你正在一个教研讨论群里发言，语气要像真实群聊，不要像写长报告。
 2. 回答控制在 2-4 句，优先回应别人已经说过的话。
-3. 不要泛泛而谈，要尽量落到教学设计、课堂执行、学生理解、评价反馈这些具体点上。
-4. 如果群里已经有文档或评审结论，就基于内容说话，不要再问“有没有文档”。`
+${responseGuide}`
 }
 
 function getRoomToneGuide(tone?: ChatRoomStrategy['roomTone']) {
@@ -369,7 +375,21 @@ function buildAgendaFromContext(
   primaryDocument: Document | null,
   review: Review | null | undefined,
   topicTags: string[] | undefined,
+  mode: DiscussionMode,
 ) {
+  const userTopic = roomTopic.trim() || '自由讨论'
+  if (mode === 'free') {
+    return [
+      {
+        id: `agenda-${createId()}`,
+        text: userTopic,
+        source: 'user' as const,
+        priority: 1,
+        status: 'active' as const,
+      },
+    ] satisfies ChatAgendaItem[]
+  }
+
   const topicPool = new TopicPool()
   if (primaryDocument) topicPool.loadFromDocument(primaryDocument)
   if (review) topicPool.loadFromReview(review)
@@ -380,7 +400,7 @@ function buildAgendaFromContext(
     return [
       {
         id: `agenda-${createId()}`,
-        text: roomTopic,
+        text: userTopic,
         source: 'user' as const,
         priority: 1,
         status: 'active' as const,
@@ -444,6 +464,10 @@ function getLatestUserMessage(messages: ChatMessage[]) {
   return [...messages].reverse().find((message) => message.sender_type === 'user')
 }
 
+function isRealUserMessage(message?: ChatMessage) {
+  return Boolean(message && message.sender_type === 'user' && message.sender_id !== 'virtual-user')
+}
+
 function inferUserIntent(message?: ChatMessage): DiscussionTurnIntent | null {
   const content = message?.content || ''
   if (!content) return null
@@ -454,10 +478,14 @@ function inferUserIntent(message?: ChatMessage): DiscussionTurnIntent | null {
   return 'open'
 }
 
-function buildRoundFocus(recentMessages: ChatMessage[], topic?: ChatAgendaItem | null) {
+function buildRoundFocus(recentMessages: ChatMessage[], topic?: ChatAgendaItem | null, mode?: DiscussionMode) {
   const latestUserMessage = getLatestUserMessage(recentMessages)
   const userFocus = latestUserMessage?.content.replace(/\s+/g, ' ').trim()
   const topicFocus = topic?.text || ''
+
+  if (mode === 'free' && isRealUserMessage(latestUserMessage) && userFocus) {
+    return `用户刚才说：“${userFocus}”。请优先回应这句话；只有用户主动提到材料、评审或课堂问题时，才回到既定议题。`
+  }
 
   if (userFocus && topicFocus && !userFocus.includes(topicFocus)) {
     return `用户刚才说：“${userFocus}”。当前议题：“${topicFocus}”。`
@@ -502,6 +530,25 @@ function buildDiscussionTurns(
   targetAgent?: Agent,
   capabilityProfiles?: Record<string, CapabilityProfile>,
 ) {
+  const latestUserMessage = getLatestUserMessage(recentMessages)
+  const userIntent = inferUserIntent(latestUserMessage)
+  const topicText = buildRoundFocus(recentMessages, topic, mode)
+
+  if (targetAgent) {
+    return [{ agent: targetAgent, intent: userIntent || 'open', focus: topicText }] satisfies DiscussionTurn[]
+  }
+
+  if (mode === 'free' && isRealUserMessage(latestUserMessage)) {
+    const responder = pickBestAgent(
+      participants,
+      recentMessages,
+      topicText,
+      [],
+      (agent) => getUserAlignmentBonus(agent, latestUserMessage)
+    )
+    return responder ? [{ agent: responder, intent: userIntent || 'open', focus: topicText }] satisfies DiscussionTurn[] : []
+  }
+
   const routedEvents = routeChatEvents({
     messages: recentMessages,
     participants,
@@ -535,13 +582,6 @@ function buildDiscussionTurns(
       wasPostureTranslated: turn.wasPostureTranslated,
       reason: turn.reason,
     })) satisfies DiscussionTurn[]
-  }
-
-  const latestUserMessage = getLatestUserMessage(recentMessages)
-  const userIntent = inferUserIntent(latestUserMessage)
-  const topicText = buildRoundFocus(recentMessages, topic)
-  if (targetAgent) {
-    return [{ agent: targetAgent, intent: userIntent || 'open', focus: topicText }] satisfies DiscussionTurn[]
   }
 
   const collisions = detectCollisions(recentMessages, participants, 8)
@@ -822,9 +862,9 @@ export default function ChatRoomPage() {
     if (!id || !room) return
     if ((room.pendingTopics || []).length > 0) return
 
-    const agendaItems = buildAgendaFromContext(room.topic, doc, review, room.topicTags)
+    const agendaItems = buildAgendaFromContext(room.topic, doc, review, room.topicTags, discussionMode)
     setAgenda(id, agendaItems, agendaItems[0]?.id)
-  }, [doc, id, review, room, setAgenda])
+  }, [discussionMode, doc, id, review, room, setAgenda])
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -1165,7 +1205,7 @@ export default function ChatRoomPage() {
           [
             '请直接回应用户或当前最后一条消息。',
             skippedForRepetition > 0 ? buildRepetitionRecoveryInstruction('skip') : '',
-            buildTurnInstruction({ agent: fallbackAgent, intent: inferUserIntent(getLatestUserMessage(conversation)) || 'open', focus: buildRoundFocus(conversation, topic) }, 0, discussionMode),
+            buildTurnInstruction({ agent: fallbackAgent, intent: inferUserIntent(getLatestUserMessage(conversation)) || 'open', focus: buildRoundFocus(conversation, topic, discussionMode) }, 0, discussionMode),
           ].filter(Boolean).join('\n'),
         )
         setTypingAgentIds([])
@@ -1230,6 +1270,11 @@ export default function ChatRoomPage() {
     const kickoffKey = `${id}:${activeTopic?.id || 'room'}`
     if (kickoffSeedRef.current === kickoffKey) return
 
+    if (discussionMode === 'free') {
+      kickoffSeedRef.current = kickoffKey
+      return
+    }
+
     kickoffSeedRef.current = kickoffKey
     const timer = window.setTimeout(() => {
       if (abortRef.current?.signal.aborted) return
@@ -1248,7 +1293,7 @@ export default function ChatRoomPage() {
     }, 900)
 
     return () => window.clearTimeout(timer)
-  }, [agenda, currentTopic, doc, hasValidConfig, id, loading, messages, participants.length, room, runDiscussionRound])
+  }, [agenda, currentTopic, discussionMode, doc, hasValidConfig, id, loading, messages, participants.length, room, runDiscussionRound])
 
   const parseTargetAgent = useCallback((text: string) => {
     const match = text.match(/^@(\S+)\s+/)
