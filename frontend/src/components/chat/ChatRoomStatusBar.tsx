@@ -38,25 +38,25 @@ export function ChatRoomStatusBar({
   const messageCount = messages.length
 
   return (
-    <div className="border-b border-gray-100 bg-white px-5 py-2.5 text-xs text-gray-500 dark:border-gray-700 dark:bg-gray-800/40 dark:text-gray-400">
+    <div className="border-b border-slate-200 bg-slate-50 px-5 py-2.5 text-xs text-slate-600 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300">
       <div className="flex min-w-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {discussionMode ? (
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-200">
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-800 px-2.5 py-1 font-medium text-white shadow-sm dark:bg-gray-700 dark:text-gray-100">
           <Zap className="h-3 w-3" />
           {MODE_LABELS[discussionMode]}
         </span>
           ) : null}
 
           {currentTopic ? (
-        <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-200">
-          <Target className="h-3 w-3 text-primary-500" />
+        <span className="inline-flex min-w-0 max-w-[min(58vw,760px)] items-center gap-1 rounded-full border border-primary-200 bg-white px-3 py-1 font-semibold text-primary-800 shadow-sm dark:border-primary-700 dark:bg-primary-950/70 dark:text-primary-100">
+          <Target className="h-3 w-3 shrink-0 text-primary-600" />
           <span className="truncate">{currentTopic.text}</span>
         </span>
           ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 text-[11px] text-gray-400">
+        <div className="flex shrink-0 items-center gap-2 text-[11px] font-medium text-slate-500 dark:text-gray-300">
           <span>{messageCount} 条</span>
           <span>·</span>
           <span>{agentCount} 位角色</span>

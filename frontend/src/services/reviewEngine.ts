@@ -64,11 +64,20 @@ const TEACHING_EVAL_SYSTEM_PROMPT = (agent: Agent) => `${agent.system_prompt}
 2. 原理理解 — 学生对底层原理的理解程度，能否应对变式题
 3. 迁移应用 — 学生能否将知识迁移到考试和新场景中
 
+辅助评价维度（六维）：
+1. 课程设计 — 课堂结构、环节衔接和时间安排
+2. 知识链 — 前置知识、概念推进和后续衔接
+3. 教学目标 — 目标是否清晰、可达成、可检测
+4. 课程重点 — 核心内容是否突出且讲透
+5. 课程难点 — 难点拆解、脚手架和突破路径
+6. 学习梯度 — 练习与活动是否由浅入深
+
 评审要求：
 1. 聚焦知识点掌握程度、考试应用能力、竞赛衔接可行性
 2. 建议必须具体可落地，能直接转化为教学动作
 3. 不出现线下活动、户外实践等无法在在线课堂执行的建议
 4. 每个维度的评价要附具体证据
+5. dimensions 必须同时输出三维主评分和六维辅助评分，共 9 个维度
 
 只输出 JSON，不要输出 Markdown，不要输出解释，不要输出代码块。
 {
@@ -79,7 +88,13 @@ const TEACHING_EVAL_SYSTEM_PROMPT = (agent: Agent) => `${agent.system_prompt}
   "dimensions": [
     { "name": "知识掌握", "score": 4.0, "comment": "2-3 句深度评论", "evidence": "必要时引用原文" },
     { "name": "原理理解", "score": 4.0, "comment": "2-3 句深度评论", "evidence": "必要时引用原文" },
-    { "name": "迁移应用", "score": 4.0, "comment": "2-3 句深度评论", "evidence": "必要时引用原文" }
+    { "name": "迁移应用", "score": 4.0, "comment": "2-3 句深度评论", "evidence": "必要时引用原文" },
+    { "name": "课程设计", "score": 4.0, "comment": "2-3 句辅助评价", "evidence": "必要时引用原文" },
+    { "name": "知识链", "score": 4.0, "comment": "2-3 句辅助评价", "evidence": "必要时引用原文" },
+    { "name": "教学目标", "score": 4.0, "comment": "2-3 句辅助评价", "evidence": "必要时引用原文" },
+    { "name": "课程重点", "score": 4.0, "comment": "2-3 句辅助评价", "evidence": "必要时引用原文" },
+    { "name": "课程难点", "score": 4.0, "comment": "2-3 句辅助评价", "evidence": "必要时引用原文" },
+    { "name": "学习梯度", "score": 4.0, "comment": "2-3 句辅助评价", "evidence": "必要时引用原文" }
   ],
   "suggestions": [
     {
@@ -432,7 +447,7 @@ function normalizeTeachingEvalDimensions(dimensions: ParsedReviewPayload['dimens
       : []
   )
 
-  return TEACHING_EVAL_DIMENSIONS.map((dimName) => {
+  return [...TEACHING_EVAL_DIMENSIONS, ...TEACHING_DIMENSIONS].map((dimName) => {
     const found = dimensionMap.get(dimName)
     return {
       name: dimName as TeachingEvalDimension,
@@ -488,7 +503,7 @@ ${truncatedContent}`,
       score: 3.5,
       opinion: buildFallbackOpinion(rawText),
       status: 'completed',
-      dimensions: TEACHING_EVAL_DIMENSIONS.map((name) => ({ name, score: 3.5 })),
+      dimensions: [...TEACHING_EVAL_DIMENSIONS, ...TEACHING_DIMENSIONS].map((name) => ({ name, score: 3.5 })),
       suggestions: [],
     }
   }

@@ -35,7 +35,9 @@ export function buildTifenReportMessages(document: Document, agentReviews: Agent
 2. 建议必须具体可操作，能转化为在线课堂动作、练习设计或检测方式。
 3. 不要提出线下活动、户外实践、家访、线下分组等建议。
 4. 必须基于给定教案内容和评价结果，不要写成通用模板。
-5. 输出报告正文即可，使用清晰小标题和短段落，不输出 JSON。`,
+5. 输出一篇中文短报告，不输出 Markdown 表格，不使用 **、##、---、| 这类 Markdown 标记。
+6. 总字数控制在 450-700 字，最多 4 个小标题，每个小标题下 1-2 个短段落。
+7. 语气参考 PDF 教研简报：标题清楚、段落集中、少列点、少分段，避免模板化堆砌。`,
     },
     {
       role: 'user',
@@ -50,7 +52,7 @@ ${documentContent || '暂无教案原文'}
 【三维评价与建议】
 ${reviewDigest || '暂无评价结果'}
 
-请围绕「提分与升学」「竞赛支持」「密考应对」「分数产出优化」给出有针对性的建议。`,
+请围绕「提分与升学」「竞赛支持」「密考应对」「分数产出优化」给出有针对性的建议。不要输出 Markdown 表格和加粗标记。`,
     },
   ]
 }
@@ -63,13 +65,13 @@ export function buildFallbackTifenReport(document: Document, agentReviews: Agent
     .map((dimension) => `- ${dimension.name}：${dimension.comment || `${dimension.score.toFixed(1)} 分，需继续细化提分动作。`}`)
 
   return [
-    `## 提分与升学`,
+    `提分与升学`,
     `围绕《${document.title}》的当前评审结果，优先把知识点掌握、原理理解和迁移应用转化为可检测的课堂产出。`,
     '',
-    `## 竞赛支持与密考应对`,
+    `竞赛支持与密考应对`,
     dimensionLines.length ? dimensionLines.join('\n') : '- 暂无明确维度评语，建议先补充变式题和限时检测。',
     '',
-    `## 分数产出优化`,
+    `分数产出优化`,
     topSuggestions.length
       ? topSuggestions.map((suggestion) => `- ${suggestion.title || '建议'}：${suggestion.content}`).join('\n')
       : '- 建议设置课前诊断、课中变式、课后错因复盘三段检测，确保每个动作都有分数反馈。',

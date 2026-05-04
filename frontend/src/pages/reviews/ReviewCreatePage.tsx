@@ -1174,8 +1174,8 @@ export default function ReviewCreatePage() {
                     </Link>
                   </div>
                 ) : (
-                  <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-                    <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
+                  <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                       {documents.map((document) => (
                         <button
                           key={document.id}
@@ -1206,21 +1206,20 @@ export default function ReviewCreatePage() {
 
                     <div className="rounded-[24px] border border-primary-100 bg-primary-50/50 p-5">
                       {selectedDoc ? (
-                        <div className="flex h-full flex-col gap-4">
+                        <div className="flex h-full flex-col justify-between gap-4">
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">案例详情</p>
                             <h3 className="mt-2 text-xl font-semibold text-gray-900">{selectedDoc.title}</h3>
                             <p className="mt-2 text-xs text-gray-500">
                               {selectedDoc.word_count?.toLocaleString() || 0} 字 · {selectedDoc.file_type.toUpperCase()} · 已上传文档
                             </p>
-                          </div>
-                          {selectedDoc.summary ? (
-                            <p className="rounded-2xl bg-white/80 p-3 text-sm leading-7 text-gray-700">{selectedDoc.summary}</p>
-                          ) : null}
-                          <div className="min-h-32 flex-1 rounded-2xl bg-white/80 p-3">
-                            <p className="max-h-52 overflow-y-auto whitespace-pre-wrap text-sm leading-7 text-gray-700">
-                              {(selectedDoc.raw_content || '暂无可预览内容').slice(0, 1200)}
-                            </p>
+                            {selectedDoc.summary ? (
+                              <p className="mt-3 line-clamp-3 rounded-2xl bg-white/80 p-3 text-sm leading-7 text-gray-700">{selectedDoc.summary}</p>
+                            ) : (
+                              <p className="mt-3 rounded-2xl bg-white/80 p-3 text-sm leading-7 text-gray-600">
+                                单文档评审不展示正文预览，避免挤压角色选择区。开始后系统会读取完整文档内容。
+                              </p>
+                            )}
                           </div>
                           <Button onClick={handleStart} disabled={!canStart} size="lg" className="w-full justify-center py-6 text-base">
                             <Play className="h-5 w-5" />

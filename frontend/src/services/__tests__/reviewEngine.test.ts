@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { TEACHING_EVAL_DIMENSIONS } from '@/types'
+import { TEACHING_DIMENSIONS, TEACHING_EVAL_DIMENSIONS } from '@/types'
 import type { Agent, Document, DiffResult } from '@/types'
 import { executeCompareReview, executeTeachingEvalReview, generateTifenReport } from '../reviewEngine'
 
@@ -60,7 +60,7 @@ describe('reviewEngine done-task integrations', () => {
     chatCompletionMock.mockReset()
   })
 
-  it('executes teaching eval reviews with the three required dimensions', async () => {
+  it('executes teaching eval reviews with primary and auxiliary dimensions', async () => {
     let capturedMessages: MockMessage[] = []
     mockCompletion(
       {
@@ -71,6 +71,12 @@ describe('reviewEngine done-task integrations', () => {
           { name: '知识掌握', score: 4.5, comment: '知识点覆盖完整', evidence: '掌握面积公式' },
           { name: '原理理解', score: 4.1, comment: '原理解释需要更充分', evidence: '面积公式' },
           { name: '迁移应用', score: 3.8, comment: '迁移题数量偏少', evidence: '变式题' },
+          { name: '课程设计', score: 4.3, comment: '结构较清楚', evidence: '导入活动' },
+          { name: '知识链', score: 4.0, comment: '前后衔接基本成立', evidence: '面积公式' },
+          { name: '教学目标', score: 4.2, comment: '目标可检测', evidence: '解决变式题' },
+          { name: '课程重点', score: 4.1, comment: '重点明确', evidence: '面积公式' },
+          { name: '课程难点', score: 3.9, comment: '难点拆解还可加强', evidence: '变式题' },
+          { name: '学习梯度', score: 3.7, comment: '练习梯度不足', evidence: '练习设计' },
         ],
         suggestions: [
           {
@@ -90,10 +96,12 @@ describe('reviewEngine done-task integrations', () => {
     const result = await executeTeachingEvalReview(agent, document, vi.fn())
 
     expect(result.status).toBe('completed')
-    expect(result.dimensions.map((dimension) => dimension.name)).toEqual(TEACHING_EVAL_DIMENSIONS)
+    expect(result.dimensions.map((dimension) => dimension.name)).toEqual([...TEACHING_EVAL_DIMENSIONS, ...TEACHING_DIMENSIONS])
     expect(result.dimensions[0]).toMatchObject({ name: '知识掌握', score: 4.5, evidence: '掌握面积公式' })
+    expect(result.dimensions[3]).toMatchObject({ name: '课程设计', score: 4.3, evidence: '导入活动' })
     expect(result.suggestions[0]).toMatchObject({ source_agent: '教研负责人', priority: 'high' })
     expect(capturedMessages[0].content).toContain('三维评价体系')
+    expect(capturedMessages[0].content).toContain('辅助评价维度')
     expect(capturedMessages[0].content).toContain('在线教育机构')
   })
 

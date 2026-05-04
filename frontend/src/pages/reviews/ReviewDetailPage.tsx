@@ -54,6 +54,67 @@ function getScoreTone(score?: number) {
   return 'danger' as const
 }
 
+type TifenSection = {
+  title: string
+  paragraphs: string[]
+}
+
+function cleanReportLine(line: string) {
+  return line
+    .replace(/^#{1,6}\s*/, '')
+    .replace(/^\s*[-*+]\s+/, '')
+    .replace(/^\s*\d+[.、]\s*/, '')
+    .replace(/\*\*/g, '')
+    .replace(/`/g, '')
+    .replace(/\|/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+function formatTifenReport(report: string): TifenSection[] {
+  const rawLines = report
+    .split(/\r?\n/)
+    .map(cleanReportLine)
+    .filter((line) => line && !/^[-—]{3,}$/.test(line))
+
+  const sections: TifenSection[] = []
+  let current: TifenSection = { title: '提分思路', paragraphs: [] }
+
+  const flush = () => {
+    if (current.paragraphs.length > 0 || current.title !== '提分思路') {
+      sections.push({
+        title: current.title,
+        paragraphs: current.paragraphs.map((paragraph) => paragraph.replace(/\s+/g, ' ').trim()).filter(Boolean),
+      })
+    }
+  }
+
+  for (const line of rawLines) {
+    const looksLikeTitle =
+      line.length <= 24 &&
+      !/[。！？；：:，,]/.test(line) &&
+      /(提分|升学|竞赛|密考|分数|建议|优化|训练|检测|路径|策略)/.test(line)
+
+    if (looksLikeTitle) {
+      flush()
+      current = { title: line, paragraphs: [] }
+      continue
+    }
+
+    current.paragraphs.push(line)
+  }
+  flush()
+
+  if (sections.length === 0 && rawLines.length > 0) {
+    return [{ title: '提分思路', paragraphs: rawLines }]
+  }
+
+  return sections.map((section) => ({
+    title: section.title,
+    paragraphs: section.paragraphs.slice(0, 3),
+  }))
+}
+
 export default function ReviewDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -63,6 +124,8 @@ export default function ReviewDetailPage() {
   const evidenceRef = useRef<HTMLDivElement>(null)
   const [showKeyInsights, setShowKeyInsights] = useState(true)
   const [showAuxiliaryDimensions, setShowAuxiliaryDimensions] = useState(false)
+  const [isTifenExpanded, setIsTifenExpanded] = useState(false)
+  const [agentDimensionView, setAgentDimensionView] = useState<'primary' | 'auxiliary'>('primary')
   const [activeEvidence, setActiveEvidence] = useState<string | null>(null)
   const agentReviews = useMemo(() => review?.agent_reviews || [], [review?.agent_reviews])
   const completedReviews = useMemo(
@@ -173,6 +236,10 @@ export default function ReviewDetailPage() {
     () => avgDimScores.filter((dimension) => auxiliaryDimensions.includes(dimension.name as (typeof auxiliaryDimensions)[number])),
     [auxiliaryDimensions, avgDimScores],
   )
+  const tifenReport = review?.tifenReport?.trim()
+  const tifenSections = useMemo(() => formatTifenReport(tifenReport || ''), [tifenReport])
+  const isLongTifenReport = (tifenReport?.length || 0) > 520 || tifenSections.length > 3
+  const visibleTifenSections = isLongTifenReport && !isTifenExpanded ? tifenSections.slice(0, 2) : tifenSections
 
   if (!review) {
     return (
@@ -224,7 +291,6 @@ export default function ReviewDetailPage() {
   const strengths = (summary?.strengths || []).slice(0, 4)
   const painPoints = (summary?.pain_points || []).slice(0, 4)
   const dimensionLabel = chartDimensions.length === 3 ? '三维评价' : chartDimensions.length === 6 ? '六维度' : `${chartDimensions.length}维度`
-  const tifenReport = review.tifenReport?.trim()
   const documentText = review.document?.raw_content || ''
   const normalizedEvidence = activeEvidence?.trim() || ''
   const evidenceIndex = normalizedEvidence ? documentText.indexOf(normalizedEvidence) : -1
@@ -496,13 +562,44 @@ export default function ReviewDetailPage() {
 
   const renderAgentCards = (items: AgentReview[], title: string, icon: string) => {
     if (items.length === 0) return null
+    const displayDimensions = (item: AgentReview) => {
+      if (!hasTeachingEvalDimensions) return item.dimensions
+      const names = agentDimensionView === 'primary' ? TEACHING_EVAL_DIMENSIONS : TEACHING_DIMENSIONS
+      return names
+        .map((name) => item.dimensions.find((dimension) => dimension.name === name))
+        .filter((dimension): dimension is AgentReview['dimensions'][number] => Boolean(dimension))
+    }
 
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <span className="text-base">{icon}</span>
-          <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-          <Badge variant="default">{items.length}</Badge>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-base">{icon}</span>
+            <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
+            <Badge variant="default">{items.length}</Badge>
+          </div>
+          {hasTeachingEvalDimensions ? (
+            <div className="flex rounded-full border border-gray-200 bg-gray-50 p-1">
+              <button
+                onClick={() => setAgentDimensionView('primary')}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                  agentDimensionView === 'primary' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                )}
+              >
+                三维
+              </button>
+              <button
+                onClick={() => setAgentDimensionView('auxiliary')}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                  agentDimensionView === 'auxiliary' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                )}
+              >
+                六维
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-4">
@@ -555,7 +652,7 @@ export default function ReviewDetailPage() {
                   ) : null}
 
                   <div className="grid gap-3 md:grid-cols-2">
-                    {item.dimensions.map((dimension) => (
+                    {displayDimensions(item).map((dimension) => (
                       <div key={dimension.name} className="rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
                         <div className="mb-2 flex items-center justify-between text-xs">
                           <span className="font-medium text-gray-700">{dimension.name}</span>
@@ -851,21 +948,55 @@ export default function ReviewDetailPage() {
 
       {tifenReport ? (
         <section className="dm-stage-reveal" style={{ ['--reveal-delay' as string]: '165ms' }}>
-          <Card className="rounded-[28px] border-primary-200 bg-primary-50/40">
+          <Card className="relative overflow-hidden rounded-[28px] border-primary-200 bg-white">
             <CardHeader className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">AI Suggestion Report</p>
                 <h2 className="mt-1 text-base font-semibold text-gray-900">提分思路</h2>
-                <p className="mt-1 text-xs leading-6 text-gray-500">聚焦提分、升学、竞赛和密考场景的可执行建议报告。</p>
+                <p className="mt-1 text-xs leading-6 text-gray-500">按中文短报告规整呈现，长内容默认收起，便于快速阅读。</p>
               </div>
-              <Badge variant="primary">AI建议报告</Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="primary">AI建议报告</Badge>
+                {isLongTifenReport ? (
+                  <Button variant="secondary" size="sm" onClick={() => setIsTifenExpanded((previous) => !previous)}>
+                    {isTifenExpanded ? '收起' : '展开全文'}
+                  </Button>
+                ) : null}
+              </div>
             </CardHeader>
-            <CardContent className="space-y-3 p-5">
-              {tifenReport.split('\n').filter(Boolean).map((line, index) => (
-                <div key={`${index}-${line}`} className="rounded-2xl border border-white/60 bg-white/90 px-4 py-3 text-sm leading-7 text-gray-700">
-                  {line.replace(/^#{1,3}\s*/, '')}
+            <CardContent className="p-6">
+              <div className={cn('space-y-5', isLongTifenReport && !isTifenExpanded && 'max-h-72 overflow-hidden')}>
+                {visibleTifenSections.map((section, index) => (
+                  <article key={`${section.title}-${index}`} className="border-l-2 border-primary-200 pl-4">
+                    <h3 className="text-sm font-semibold text-gray-950">{section.title}</h3>
+                    <div className="mt-2 space-y-2">
+                      {section.paragraphs.map((paragraph) => (
+                        <p key={paragraph} className="text-[15px] leading-8 text-gray-700">
+                          {paragraph}
+                        </p>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+              {isLongTifenReport && !isTifenExpanded ? (
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white to-white/0" />
+              ) : null}
+              {isLongTifenReport ? (
+                <div className="relative mt-5 flex justify-center">
+                  <Button variant="secondary" size="sm" onClick={() => setIsTifenExpanded((previous) => !previous)}>
+                    {isTifenExpanded ? '收起提分思路' : '展开完整提分思路'}
+                  </Button>
                 </div>
-              ))}
+              ) : null}
+              {isLongTifenReport && isTifenExpanded ? (
+                <button
+                  onClick={() => setIsTifenExpanded(false)}
+                  className="sticky bottom-5 float-right mt-4 rounded-full border border-primary-200 bg-white/95 px-4 py-2 text-xs font-semibold text-primary-700 shadow-lg backdrop-blur transition-colors hover:bg-primary-50"
+                >
+                  收起
+                </button>
+              ) : null}
             </CardContent>
           </Card>
         </section>
