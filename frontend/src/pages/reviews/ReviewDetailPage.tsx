@@ -140,7 +140,7 @@ export default function ReviewDetailPage() {
   const [showKeyInsights, setShowKeyInsights] = useState(true)
   const [activeEvaluationView, setActiveEvaluationView] = useState<'primary' | 'auxiliary'>('primary')
   const [isTifenExpanded, setIsTifenExpanded] = useState(false)
-  const [agentDimensionView, setAgentDimensionView] = useState<'primary' | 'auxiliary'>('primary')
+  const [agentDimensionViews, setAgentDimensionViews] = useState<Record<string, 'primary' | 'auxiliary'>>({})
   const [activeEvidence, setActiveEvidence] = useState<string | null>(null)
   const agentReviews = useMemo(() => review?.agent_reviews || [], [review?.agent_reviews])
   const completedReviews = useMemo(
@@ -593,49 +593,33 @@ export default function ReviewDetailPage() {
 
   const renderAgentCards = (items: AgentReview[], title: string, icon: string) => {
     if (items.length === 0) return null
+    const getAgentDimensionView = (item: AgentReview) => agentDimensionViews[item.agent_id] || 'primary'
+    const setAgentDimensionView = (agentId: string, view: 'primary' | 'auxiliary') => {
+      setAgentDimensionViews((previous) => ({ ...previous, [agentId]: view }))
+    }
     const displayDimensions = (item: AgentReview) => {
       if (!hasTeachingEvalDimensions) return item.dimensions
-      const names = agentDimensionView === 'primary' ? TEACHING_EVAL_DIMENSIONS : TEACHING_DIMENSIONS
+      const names = getAgentDimensionView(item) === 'primary' ? TEACHING_EVAL_DIMENSIONS : TEACHING_DIMENSIONS
       return names
         .map((name) => item.dimensions.find((dimension) => dimension.name === name))
         .filter((dimension): dimension is AgentReview['dimensions'][number] => Boolean(dimension))
     }
+    const hasAuxiliaryDimensions = (item: AgentReview) => TEACHING_DIMENSIONS.some((name) => item.dimensions.some((dimension) => dimension.name === name))
 
     return (
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="text-base">{icon}</span>
             <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
             <Badge variant="default">{items.length}</Badge>
           </div>
-          {hasTeachingEvalDimensions ? (
-            <div className="flex rounded-full border border-gray-200 bg-gray-50 p-1">
-              <button
-                onClick={() => setAgentDimensionView('primary')}
-                className={cn(
-                  'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                  agentDimensionView === 'primary' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                )}
-              >
-                三维
-              </button>
-              <button
-                onClick={() => setAgentDimensionView('auxiliary')}
-                className={cn(
-                  'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                  agentDimensionView === 'auxiliary' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                )}
-              >
-                六维
-              </button>
-            </div>
-          ) : null}
         </div>
 
         <div className="space-y-4">
           {items.map((item) => {
             const agent = review.agents?.find((candidate) => candidate.id === item.agent_id)
+            const dimensionView = getAgentDimensionView(item)
 
             return (
               <Card
@@ -661,11 +645,39 @@ export default function ReviewDetailPage() {
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <p className="text-2xl font-bold" style={{ color: AGENT_COLORS[item.agent_color] }}>
-                        {item.score.toFixed(1)}
-                      </p>
-                      <Badge variant={getScoreTone(item.score)}>角色评分</Badge>
+                    <div className="flex shrink-0 items-center gap-3">
+                      {hasTeachingEvalDimensions ? (
+                        <div className="flex rounded-full border border-gray-200 bg-gray-50 p-1">
+                          <button
+                            type="button"
+                            onClick={() => setAgentDimensionView(item.agent_id, 'primary')}
+                            className={cn(
+                              'rounded-full border-0 px-3 py-1 text-xs font-medium transition-colors',
+                              dimensionView === 'primary' ? 'bg-white text-primary-700 shadow-sm' : 'bg-transparent text-gray-500 hover:text-gray-700'
+                            )}
+                          >
+                            三维
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAgentDimensionView(item.agent_id, 'auxiliary')}
+                            disabled={!hasAuxiliaryDimensions(item)}
+                            className={cn(
+                              'rounded-full border-0 px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+                              dimensionView === 'auxiliary' ? 'bg-white text-primary-700 shadow-sm' : 'bg-transparent text-gray-500 hover:text-gray-700'
+                            )}
+                          >
+                            六维
+                          </button>
+                        </div>
+                      ) : null}
+
+                      <div className="text-right">
+                        <p className="text-2xl font-bold" style={{ color: AGENT_COLORS[item.agent_color] }}>
+                          {item.score.toFixed(1)}
+                        </p>
+                        <Badge variant={getScoreTone(item.score)}>角色评分</Badge>
+                      </div>
                     </div>
                   </div>
 
