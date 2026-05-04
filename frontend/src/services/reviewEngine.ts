@@ -1,5 +1,5 @@
-import type { Agent, AgentColor, Document, AgentReview, Suggestion, ReviewSummary } from '@/types'
-import { TEACHING_DIMENSIONS } from '@/types'
+import type { Agent, AgentColor, Document, AgentReview, Suggestion, ReviewSummary, TeachingEvalDimension } from '@/types'
+import { TEACHING_DIMENSIONS, TEACHING_EVAL_DIMENSIONS } from '@/types'
 import { chatCompletion } from './llmService'
 import { createId } from '@/utils/id'
 
@@ -42,6 +42,51 @@ const REVIEW_SYSTEM_PROMPT = (agent: Agent) => `${agent.system_prompt}
       "priority": "high",
       "evidence": "必要时引用原文",
       "expected_effect": "实施后的预期改善"
+    }
+  ]
+}`
+
+const TEACHING_EVAL_SYSTEM_PROMPT = (agent: Agent) => `${agent.system_prompt}
+
+你必须使用简体中文回复。
+
+你现在正在执行一份教研案深度评审任务（三维评价体系），必须严格站在「${agent.name}」的身份与视角说话。
+
+评审定位：
+- 你服务于一家在线教育机构，核心目标是帮助学生提分
+- 关注知识点与考试、竞赛、密考的衔接
+- 不提供线下活动建议，所有建议必须在在线课堂可落地
+- 效果必须可检验，不说空话
+
+评审维度（三维）：
+1. 知识掌握 — 学生能否真正掌握教案中的知识点，达到应试要求
+2. 原理理解 — 学生对底层原理的理解程度，能否应对变式题
+3. 迁移应用 — 学生能否将知识迁移到考试和新场景中
+
+评审要求：
+1. 聚焦知识点掌握程度、考试应用能力、竞赛衔接可行性
+2. 建议必须具体可落地，能直接转化为教学动作
+3. 不出现线下活动、户外实践等无法在在线课堂执行的建议
+4. 每个维度的评价要附具体证据
+
+只输出 JSON，不要输出 Markdown，不要输出解释，不要输出代码块。
+{
+  "status_message": "2-3 句角色化短评",
+  "score": 4.2,
+  "opinion": "整体评价，聚焦提分效果和知识点落地。",
+  "highlights": ["亮点 1", "亮点 2"],
+  "dimensions": [
+    { "name": "知识掌握", "score": 4.0, "comment": "2-3 句深度评论", "evidence": "必要时引用原文" },
+    { "name": "原理理解", "score": 4.0, "comment": "2-3 句深度评论", "evidence": "必要时引用原文" },
+    { "name": "迁移应用", "score": 4.0, "comment": "2-3 句深度评论", "evidence": "必要时引用原文" }
+  ],
+  "suggestions": [
+    {
+      "title": "建议标题",
+      "content": "问题定位 -> 改进动作 -> 预期收益（含提分效果预估）",
+      "priority": "high",
+      "evidence": "必要时引用原文",
+      "expected_effect": "实施后的提分效果预估"
     }
   ]
 }`
@@ -373,6 +418,89 @@ ${truncatedContent}`,
     status: 'completed',
     highlights: normalizeTextList(parsed.highlights, 3),
     dimensions: normalizeDimensions(parsed.dimensions),
+    suggestions: normalizeSuggestions(parsed.suggestions, agent.name),
+  }
+}
+
+function normalizeTeachingEvalDimensions(dimensions: ParsedReviewPayload['dimensions']) {
+  const dimensionMap = new Map(
+    Array.isArray(dimensions)
+      ? dimensions
+          .filter((d) => d.name)
+          .map((d) => [d.name as string, d])
+      : []
+  )
+
+  return TEACHING_EVAL_DIMENSIONS.map((dimName) => {
+    const found = dimensionMap.get(dimName)
+    return {
+      name: dimName as TeachingEvalDimension,
+      score: normalizeScore(found?.score),
+      comment: found?.comment?.trim(),
+      evidence: found?.evidence?.trim(),
+    }
+  })
+}
+
+export async function executeTeachingEvalReview(
+  agent: Agent,
+  doc: Document,
+  onProgress: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<AgentReview> {
+  const docContent = doc.raw_content || '(文档内容为空)'
+  const truncatedContent = docContent.slice(0, MAX_DOC_CONTENT)
+  const teachingContext = buildTeachingContext(doc)
+  const structuredSections = buildStructuredSections(doc)
+
+  const rawText = await collectCompletionText(
+    [
+      { role: 'system', content: TEACHING_EVAL_SYSTEM_PROMPT(agent) },
+      {
+        role: 'user',
+        content: `请评审以下教研案。
+
+标题：${doc.title}${teachingContext}${structuredSections}
+
+【完整内容】
+${truncatedContent}`,
+      },
+    ],
+    signal,
+    onProgress,
+  )
+
+  let parsed = parseJsonCandidate<ParsedReviewPayload>(rawText)
+  if (!parsed) {
+    try {
+      parsed = await repairReviewPayload(rawText, signal)
+    } catch {
+      parsed = null
+    }
+  }
+
+  if (!parsed) {
+    return {
+      agent_id: agent.id,
+      agent_name: agent.name,
+      agent_color: agent.color,
+      score: 3.5,
+      opinion: buildFallbackOpinion(rawText),
+      status: 'completed',
+      dimensions: TEACHING_EVAL_DIMENSIONS.map((name) => ({ name, score: 3.5 })),
+      suggestions: [],
+    }
+  }
+
+  return {
+    agent_id: agent.id,
+    agent_name: agent.name,
+    agent_color: agent.color,
+    score: normalizeScore(parsed.score),
+    opinion: parsed.opinion?.trim() || buildFallbackOpinion(rawText),
+    status: 'completed',
+    highlights: normalizeTextList(parsed.highlights, 3),
+    dimensions: normalizeTeachingEvalDimensions(parsed.dimensions),
     suggestions: normalizeSuggestions(parsed.suggestions, agent.name),
   }
 }

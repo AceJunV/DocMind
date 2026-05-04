@@ -1,0 +1,285 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "title": "文件对比评审 — 输入流程与Diff展示",
+      "description": "新增文件对比评审入口，用户选择两个文件（修改前/后）预览确认后选择Agent组合发起对比评审。对两个文件内容做文本diff，以Word修订风格展示（删除线+绿色高亮）。master分支通用功能，开发后同步到teaching。",
+      "acceptance": [
+        "Given 用户进入评审创建页 When 选择「对比评审」模式并上传修改前/后两个文件 Then 页面显示两个文件的预览内容供确认",
+        "Given 两个文件已选择 When 系统完成文本diff解析 Then 以Word修订风格展示差异：删除内容显示删除线、新增内容绿色高亮",
+        "Given diff已展示 When 用户在Agent选择区勾选Agent（支持全选）并提交 Then 系统发起对比评审请求"
+      ],
+      "steps": [
+        "1. [锁定] 在 D:/vibe coding/User_web/frontend/src/types/index.ts 新增对比评审类型定义（CompareMode、DiffResult、DiffPoint等）",
+        "2. [锁定] 新增 D:/vibe coding/User_web/frontend/src/services/compareService.ts 实现文本diff解析（使用diff-match-patch或jsdiff库）",
+        "3. [建议] 在 D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewCreatePage.tsx 新增「对比评审」模式入口与双文件上传交互",
+        "4. [建议] 新建 D:/vibe coding/User_web/frontend/src/components/reviews/DiffViewer.tsx 实现Word修订风格diff展示组件",
+        "5. 在 D:/vibe coding/User_web/frontend/src/services/documentParser.ts 复用现有文档解析能力解析上传文件内容"
+      ],
+      "files_modified": [
+        "D:/vibe coding/User_web/frontend/src/types/index.ts",
+        "D:/vibe coding/User_web/frontend/src/services/compareService.ts",
+        "D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewCreatePage.tsx",
+        "D:/vibe coding/User_web/frontend/src/components/reviews/DiffViewer.tsx"
+      ],
+      "category": "functional",
+      "blocked_by": [],
+      "status": "InDraft"
+    },
+    {
+      "id": 2,
+      "title": "文件对比评审 — 逐条评审与报告展示",
+      "description": "对每个diff修改点进行逐条评审（是否核心/必要/贴合知识点），汇总生成整体对比评审报告。报告页面展示diff概览统计、逐条评审卡片、整体评审报告，支持按修改类型筛选。master分支通用功能。",
+      "acceptance": [
+        "Given diff点已识别且Agent评审完成 When 查看逐条评审结果 Then 每个diff点有独立评审意见（评估是否核心、是否必要、是否贴合知识点）",
+        "Given 逐条评审完成 When 查看对比评审报告 Then 报告上方展示diff概览统计（新增/修改/删除数量），中间逐条评审卡片（原文→修改后→评审意见），下方整体评审报告",
+        "Given 对比评审报告已展示 When 用户点击修改类型筛选 Then 按新增/修改/删除过滤展示对应评审卡片"
+      ],
+      "steps": [
+        "1. [锁定] 在 D:/vibe coding/User_web/frontend/src/services/reviewEngine.ts 新增对比评审引擎逻辑（逐条评审prompt + 整体报告prompt），复用现有维度体系",
+        "2. [建议] 新建 D:/vibe coding/User_web/frontend/src/pages/reviews/CompareReportPage.tsx 实现对比评审报告页面（概览统计+逐条卡片+整体报告+类型筛选）",
+        "3. [建议] 在 D:/vibe coding/User_web/frontend/src/stores/reviewStore.ts 新增对比评审状态管理"
+      ],
+      "files_modified": [
+        "D:/vibe coding/User_web/frontend/src/services/reviewEngine.ts",
+        "D:/vibe coding/User_web/frontend/src/pages/reviews/CompareReportPage.tsx",
+        "D:/vibe coding/User_web/frontend/src/stores/reviewStore.ts"
+      ],
+      "category": "functional",
+      "blocked_by": [1],
+      "status": "InDraft"
+    },
+    {
+      "id": 3,
+      "title": "角色系统优化 — 人物设定与AI辅助",
+      "description": "将用户可见的「系统提示词」术语统一改为「人物设定」。为人物设定输入框增加空状态tips和AI优化/AI续写功能。AI优化润色不改变本意，AI续写基于已有设定风格一致扩展，均提供撤销按钮。master分支通用功能。",
+      "acceptance": [
+        "Given 用户进入角色创建/编辑页面 When 查看字段标签 Then 显示「人物设定」而非「系统提示词」，角色列表/详情页展示文本同步修改",
+        "Given 人物设定输入框为空 When 用户聚焦输入框 Then 显示浅色tips「可以尝试给角色增加一些人物设定哦」",
+        "Given 用户已输入人物设定文本 When 点击「AI优化」按钮 Then LLM对文本润色优化（不改变本意），优化后内容替换原文，显示「撤销」按钮可恢复",
+        "Given 用户已输入人物设定文本 When 点击「AI续写」按钮 Then LLM基于已有设定扩展续写（风格一致、不矛盾），续写内容附加在末尾，显示「撤销」按钮可恢复"
+      ],
+      "steps": [
+        "1. 在 D:/vibe coding/User_web/frontend/src/pages/agents/AgentCreatePage.tsx 将所有用户可见的「系统提示词」文本改为「人物设定」",
+        "2. 在 D:/vibe coding/User_web/frontend/src/pages/agents/AgentEditPage.tsx 将所有用户可见的「系统提示词」文本改为「人物设定」",
+        "3. 在 D:/vibe coding/User_web/frontend/src/pages/agents/AgentListPage.tsx 将列表/详情展示中的「系统提示词」改为「人物设定」",
+        "4. [锁定] 在 AgentCreatePage.tsx 和 AgentEditPage.tsx 的人物设定输入框增加空状态tips提示和AI优化/AI续写按钮",
+        "5. [锁定] 在 D:/vibe coding/User_web/frontend/src/services/llmService.ts 新增 optimizePrompt() 和 continuePrompt() 方法，分别用于AI优化和AI续写的LLM调用，复用现有 chatCompletion() 传输层",
+        "6. 两个功能均需实现撤销按钮，保存操作前的文本副本用于恢复"
+      ],
+      "files_modified": [
+        "D:/vibe coding/User_web/frontend/src/pages/agents/AgentCreatePage.tsx",
+        "D:/vibe coding/User_web/frontend/src/pages/agents/AgentEditPage.tsx",
+        "D:/vibe coding/User_web/frontend/src/pages/agents/AgentListPage.tsx",
+        "D:/vibe coding/User_web/frontend/src/services/llmService.ts"
+      ],
+      "category": "ui",
+      "blocked_by": [],
+      "status": "InDraft"
+    },
+    {
+      "id": 4,
+      "title": "评审入口与流程优化",
+      "description": "优化评审创建页交互：点击案例先展示详情内容，下方放置醒目的大「提交评审」按钮。Agent选择区增加全选功能。已上传文档无需再次预览确认即可发起评审。master分支通用功能。",
+      "acceptance": [
+        "Given 用户点击评审案例 When 进入案例详情页 Then 先展示案例详情内容，下方放置视觉突出的大「提交评审」按钮",
+        "Given 用户在Agent选择区域 When 查看Agent列表 Then 存在「全选」复选框，勾选后所有Agent被选中",
+        "Given 用户已上传文档 When 发起评审 Then 不需要再次预览文档即可直接提交"
+      ],
+      "steps": [
+        "1. [建议] 在 D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewCreatePage.tsx 调整页面布局：案例详情→大提交按钮→Agent选择区",
+        "2. [建议] 在 Agent 选择区域新增「全选」功能",
+        "3. 去除发起评审前的强制文档预览步骤"
+      ],
+      "files_modified": [
+        "D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewCreatePage.tsx"
+      ],
+      "category": "ui",
+      "blocked_by": [],
+      "status": "InDraft"
+    },
+    {
+      "id": 5,
+      "title": "角色引导与聊天室配置流程",
+      "description": "优化发起评审→角色→聊天室的流程衔接。无角色时引导新建角色；进入聊天室前弹出配置弹窗（讨论模式、策略参数等），确保进入后功能表现与配置一致。master分支通用功能。",
+      "acceptance": [
+        "Given 用户发起评审且尚未创建任何角色 When 进入Agent选择 Then 显示明确的角色新建引导（含创建按钮），而非停留在空列表",
+        "Given 用户已选择Agent并跳转聊天室 When 进入聊天室前 Then 弹出配置弹窗（讨论模式、策略参数等），必须在进入前完成配置"
+      ],
+      "steps": [
+        "1. [建议] 在 D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewCreatePage.tsx Agent选择区增加无角色时的引导提示和快捷创建入口",
+        "2. [建议] 在 D:/vibe coding/User_web/frontend/src/pages/chat/ChatRoomPage.tsx 增加进入前的配置弹窗（讨论模式、策略参数），复用新建聊天室流程的配置界面"
+      ],
+      "files_modified": [
+        "D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewCreatePage.tsx",
+        "D:/vibe coding/User_web/frontend/src/pages/chat/ChatRoomPage.tsx"
+      ],
+      "category": "ui",
+      "blocked_by": [],
+      "status": "InDraft"
+    },
+    {
+      "id": 6,
+      "title": "评审报告增强（核心提炼+证据跳转+导出）",
+      "description": "报告顶部增加核心提炼模块（3个核心问题+2-3个亮点，可折叠）。证据字段可点击跳转到文档原文对应位置，浮动气泡高亮展示并支持返回。增加导出按钮支持导出完整评审报告。master分支通用功能。",
+      "acceptance": [
+        "Given 评审报告已生成 When 查看报告顶部 Then 显示「核心提炼」模块：列出最核心的3个问题和最值得保留的2-3个亮点，可折叠/展开",
+        "Given 评审报告中有证据字段 When 用户点击证据文本 Then 页面跳转/滚动到文档原文对应位置，显示浮动气泡高亮证据内容，气泡上有「返回」按钮可回到报告",
+        "Given 用户在评审报告页面 When 点击「导出」按钮 Then 导出完整评审报告为PDF或图片格式，包含雷达图、各维度评分、评语和建议"
+      ],
+      "steps": [
+        "1. [锁定] 在 D:/vibe coding/User_web/frontend/src/services/reviewEngine.ts 评审summary生成时同步提炼核心问题和亮点",
+        "2. [建议] 在 D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewDetailPage.tsx 报告顶部新增核心提炼模块（折叠/展开交互）",
+        "3. [建议] 在 ReviewDetailPage.tsx 实现证据点击跳转文档原文+浮动气泡+返回功能",
+        "4. [建议] 在 ReviewDetailPage.tsx 增加导出按钮，实现报告导出（html2canvas或jspdf等方案）"
+      ],
+      "files_modified": [
+        "D:/vibe coding/User_web/frontend/src/services/reviewEngine.ts",
+        "D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewDetailPage.tsx"
+      ],
+      "category": "functional",
+      "blocked_by": [],
+      "status": "InDraft"
+    },
+    {
+      "id": 7,
+      "title": "聊天室交互增强（追问+消息筛选+引用建议）",
+      "description": "Agent消息旁增加追问按钮，点击后以引用格式发起讨论，目标Agent优先回复。顶部Agent头像筛选器支持按Agent过滤消息。提供引用评审建议入口，选择建议后以引用形式插入消息。master分支通用功能。",
+      "acceptance": [
+        "Given 聊天室中有Agent消息 When 用户点击某条消息旁的「追问」按钮 Then 自动以「针对[Agent名]的观点：[引用内容]」格式发起讨论，被追问的Agent优先回复",
+        "Given 聊天室顶部展示参与Agent头像列表 When 用户点击某个头像 Then 只显示该Agent的消息，再次点击取消筛选显示全部，「全部」按钮恢复完整消息流",
+        "Given 用户在聊天室 When 通过「引用建议」入口选择评审建议 Then 消息中以引用格式插入该建议，Agent能识别并基于此展开讨论"
+      ],
+      "steps": [
+        "1. [建议] 在 D:/vibe coding/User_web/frontend/src/pages/chat/ChatRoomPage.tsx 每条Agent消息旁新增「追问」按钮，实现引用格式发起的追问逻辑",
+        "2. [建议] 在 D:/vibe coding/User_web/frontend/src/components/chat/ChatToolbar.tsx 新增Agent头像筛选器，支持按Agent过滤消息",
+        "3. [建议] 在 ChatRoomPage.tsx 新增「引用建议」入口，展示评审报告建议列表，选中后以引用格式插入消息"
+      ],
+      "files_modified": [
+        "D:/vibe coding/User_web/frontend/src/pages/chat/ChatRoomPage.tsx",
+        "D:/vibe coding/User_web/frontend/src/components/chat/ChatToolbar.tsx"
+      ],
+      "category": "functional",
+      "blocked_by": [],
+      "status": "InDraft"
+    },
+    {
+      "id": 8,
+      "title": "文档统一关联视图",
+      "description": "新增文档详情页，以文档维度聚合展示所有关联内容：评审记录时间线/列表、关联的聊天室讨论、建议采纳情况统计。从文档列表点击文档进入。master分支通用功能。",
+      "acceptance": [
+        "Given 用户在文档列表页 When 点击某个文档 Then 进入文档详情页，展示该文档所有评审记录（时间线或列表形式）",
+        "Given 文档详情页 When 查看关联内容 Then 展示该文档关联的所有聊天室讨论和建议采纳情况统计"
+      ],
+      "steps": [
+        "1. [建议] 完善 D:/vibe coding/User_web/frontend/src/pages/documents/DocumentDetailPage.tsx 展示该文档所有评审记录（时间线/列表）",
+        "2. [建议] 在 DocumentDetailPage.tsx 展示该文档关联的所有聊天室讨论",
+        "3. [建议] 在 DocumentDetailPage.tsx 展示建议采纳情况统计",
+        "4. [建议] 在 D:/vibe coding/User_web/frontend/src/pages/documents/DocumentListPage.tsx 确保点击文档跳转到详情页"
+      ],
+      "files_modified": [
+        "D:/vibe coding/User_web/frontend/src/pages/documents/DocumentDetailPage.tsx",
+        "D:/vibe coding/User_web/frontend/src/pages/documents/DocumentListPage.tsx"
+      ],
+      "category": "ui",
+      "blocked_by": [],
+      "status": "InDraft"
+    },
+    {
+      "id": 9,
+      "title": "全局体验优化（空状态+错误提示+多份评审）",
+      "description": "各模块空状态时显示友好提示和快捷创建按钮。LLM错误提示区分错误类型并给人类可读描述和重试按钮。确认和完善同一文档多份评审能力。master分支通用功能。",
+      "acceptance": [
+        "Given 新用户无角色/无文档/无评审 When 进入对应列表页 Then 显示友好提示（如「创建你的第一个角色」）和快捷创建按钮",
+        "Given LLM调用失败 When 显示错误提示 Then 区分错误类型（网络超时/API额度不足/模型返回格式异常），每种给出人类可读描述和建议操作，提供「重试」按钮",
+        "Given 同一文档已有历史评审 When 用户发起新评审 Then 新评审不覆盖历史记录，评审列表中按文档分组显示多份评审"
+      ],
+      "steps": [
+        "1. [建议] 在 D:/vibe coding/User_web/frontend/src/pages/agents/AgentListPage.tsx 无角色时显示空状态提示+创建按钮",
+        "2. [建议] 在 D:/vibe coding/User_web/frontend/src/pages/documents/DocumentListPage.tsx 无文档时显示空状态提示+上传按钮",
+        "3. [建议] 在 D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewListPage.tsx 无评审时显示空状态提示+评审按钮",
+        "4. [锁定] 在 D:/vibe coding/User_web/frontend/src/services/llmService.ts 优化LLMError的message生成，按错误码返回人类可读描述和建议",
+        "5. [建议] 确认并完善 D:/vibe coding/User_web/frontend/src/stores/reviewStore.ts 中同一文档多份评审的支持，按文档分组展示"
+      ],
+      "files_modified": [
+        "D:/vibe coding/User_web/frontend/src/pages/agents/AgentListPage.tsx",
+        "D:/vibe coding/User_web/frontend/src/pages/documents/DocumentListPage.tsx",
+        "D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewListPage.tsx",
+        "D:/vibe coding/User_web/frontend/src/services/llmService.ts"
+      ],
+      "category": "ui",
+      "blocked_by": [],
+      "status": "InDraft"
+    },
+    {
+      "id": 10,
+      "title": "三维评价类型与引擎（教研专属）",
+      "description": "新增三维评价体系（知识掌握/原理理解/迁移应用）类型定义、评审引擎prompt和Agent角色prompt。强化提分导向：定位在线教育机构、以提分为核心目标、关注竞赛和密考场景、弱化虚向指标、强调效果可检验。仅在teaching分支开发。",
+      "acceptance": [
+        "Given 评审引擎初始化 When 加载三维评价体系 Then types中定义三个维度（知识掌握/原理理解/迁移应用），每个维度1-5分评分附带评语和证据",
+        "Given Agent发起评审 When 使用提分导向system prompt Then 评审输出聚焦知识点掌握/考试应用/竞赛衔接，不出现线下活动建议，建议具体可落地",
+        "Given 预设角色 When 调用buildSystemPrompt() Then prompt包含提分导向约束（定位在线教育机构、核心目标提分、关注竞赛密考场景）"
+      ],
+      "steps": [
+        "1. [锁定] 在 D:/vibe coding/User_web/frontend/src/types/index.ts 新增三维评价类型定义（TeachingDimension、TeachingScore、TeachingReview等），保留现有6维类型不变",
+        "2. [锁定] 在 D:/vibe coding/User_web/frontend/src/services/reviewEngine.ts 新增三维评审system prompt（知识掌握/原理理解/迁移应用），强化提分导向（在线教育机构定位、竞赛密考场景、无线下活动建议、效果可检验）",
+        "3. [锁定] 在 D:/vibe coding/User_web/frontend/src/stores/agentStore.ts 修改buildSystemPrompt()函数，为所有预设角色prompt注入提分导向约束",
+        "4. 所有LLM系统提示词必须包含「请使用简体中文回复」约束"
+      ],
+      "files_modified": [
+        "D:/vibe coding/User_web/frontend/src/types/index.ts",
+        "D:/vibe coding/User_web/frontend/src/services/reviewEngine.ts",
+        "D:/vibe coding/User_web/frontend/src/stores/agentStore.ts"
+      ],
+      "category": "functional",
+      "blocked_by": [],
+      "status": "InReview"
+    },
+    {
+      "id": 11,
+      "title": "三维评价与层级关系UI（教研专属）",
+      "description": "在评审报告页面实现三维评价独立板块展示（雷达图双面板或Tab切换）。三维作为一级核心维度视觉权重更高，6维作为二级辅助维度可折叠/展开。仅在teaching分支开发。",
+      "acceptance": [
+        "Given 评审报告已生成 When 查看评价板块 Then 三维评价（知识掌握/原理理解/迁移应用）作为一级主评分板块以雷达图展示",
+        "Given 评审报告展示 When 查看6维评价 Then 6维（课程设计/知识链等）作为二级辅助维度，默认折叠可点击展开查看",
+        "Given 报告展示 When 对比三维和6维 Then 三维评价视觉权重明显高于6维"
+      ],
+      "steps": [
+        "1. [建议] 在 D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewDetailPage.tsx 新增三维评价独立板块（雷达图+各维度评分+评语证据），与6维板块并存",
+        "2. [建议] 在 D:/vibe coding/User_web/frontend/src/components/ui/RadarChart.tsx 支持三维雷达图渲染（或新建独立三维雷达图组件），复用现有雷达图组件模式",
+        "3. [建议] 实现维度层级关系：三维优先展示，6维默认折叠可展开，可通过Tab切换或上下布局"
+      ],
+      "files_modified": [
+        "D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewDetailPage.tsx",
+        "D:/vibe coding/User_web/frontend/src/components/ui/RadarChart.tsx"
+      ],
+      "category": "ui",
+      "blocked_by": [10],
+      "status": "InDraft"
+    },
+    {
+      "id": 12,
+      "title": "提分思路板块（教研专属）",
+      "description": "新增AI生成的提分建议报告板块。评审完成后根据教案内容和三维评价结果生成提分思路报告，聚焦提分/升学/竞赛/密考场景，以AI建议报告形式呈现，建议具体可操作。新建teachingPrompts.ts管理提分相关prompt模板。仅在teaching分支开发。",
+      "acceptance": [
+        "Given 三维评审完成 When 系统生成提分思路报告 Then 报告聚焦以下核心方向：提分与升学、竞赛支持、密考应对、分数产出优化",
+        "Given 提分思路报告 When 用户查看 Then 报告以AI建议报告形式呈现（非评分形式），建议具体可操作，不出现线下活动建议",
+        "Given 提分思路报告 When 查看内容 Then 报告基于教案内容和三维评价结果生成，有针对性而非通用模板"
+      ],
+      "steps": [
+        "1. [锁定] 新建 D:/vibe coding/User_web/frontend/src/services/teachingPrompts.ts 管理提分思路prompt模板（核心要点：提分与升学、竞赛内容建议、密考应对、分数产出优化），复用 llmService.chatCompletion() 传输层",
+        "2. [锁定] 在 D:/vibe coding/User_web/frontend/src/services/reviewEngine.ts 新增 generateTifenReport() 方法，调用 teachingPrompts 模板生成提分思路报告",
+        "3. [建议] 在 D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewDetailPage.tsx 评审报告页面新增「提分思路」板块，以AI建议报告形式展示",
+        "4. 所有LLM系统提示词必须包含「请使用简体中文回复」约束"
+      ],
+      "files_modified": [
+        "D:/vibe coding/User_web/frontend/src/services/teachingPrompts.ts",
+        "D:/vibe coding/User_web/frontend/src/services/reviewEngine.ts",
+        "D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewDetailPage.tsx"
+      ],
+      "category": "functional",
+      "blocked_by": [10],
+      "status": "InDraft"
+    }
+  ]
+}

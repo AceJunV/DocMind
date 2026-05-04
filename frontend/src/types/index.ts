@@ -31,6 +31,26 @@ export type TeachingDimension = '课程设计' | '知识链' | '教学目标' | 
 
 export const TEACHING_DIMENSIONS: TeachingDimension[] = ['课程设计', '知识链', '教学目标', '课程重点', '课程难点', '学习梯度']
 
+// 三维评价维度（教研分支专属）
+export type TeachingEvalDimension = '知识掌握' | '原理理解' | '迁移应用'
+
+export const TEACHING_EVAL_DIMENSIONS: TeachingEvalDimension[] = ['知识掌握', '原理理解', '迁移应用']
+
+export interface TeachingEvalScore {
+  dimension: TeachingEvalDimension
+  score: number
+  comment: string
+  evidence?: string
+}
+
+export interface TeachingEvalResult {
+  overall_score: number
+  opinion: string
+  highlights: string[]
+  dimensions: TeachingEvalScore[]
+  suggestions: Suggestion[]
+}
+
 export interface TeachingPlanFields {
   subject?: string
   grade?: string
