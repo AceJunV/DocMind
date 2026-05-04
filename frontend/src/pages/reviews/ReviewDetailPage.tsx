@@ -123,7 +123,7 @@ export default function ReviewDetailPage() {
   const reportTopRef = useRef<HTMLDivElement>(null)
   const evidenceRef = useRef<HTMLDivElement>(null)
   const [showKeyInsights, setShowKeyInsights] = useState(true)
-  const [showAuxiliaryDimensions, setShowAuxiliaryDimensions] = useState(false)
+  const [activeEvaluationView, setActiveEvaluationView] = useState<'primary' | 'auxiliary'>('primary')
   const [isTifenExpanded, setIsTifenExpanded] = useState(false)
   const [agentDimensionView, setAgentDimensionView] = useState<'primary' | 'auxiliary'>('primary')
   const [activeEvidence, setActiveEvidence] = useState<string | null>(null)
@@ -240,6 +240,17 @@ export default function ReviewDetailPage() {
   const tifenSections = useMemo(() => formatTifenReport(tifenReport || ''), [tifenReport])
   const isLongTifenReport = (tifenReport?.length || 0) > 520 || tifenSections.length > 3
   const visibleTifenSections = isLongTifenReport && !isTifenExpanded ? tifenSections.slice(0, 2) : tifenSections
+  const dimensionLabel = chartDimensions.length === 3 ? '三维评价' : chartDimensions.length === 6 ? '六维度' : `${chartDimensions.length}维度`
+  const isAuxiliaryEvaluation = hasTeachingEvalDimensions && activeEvaluationView === 'auxiliary'
+  const activeEvaluationDimensions = isAuxiliaryEvaluation ? auxiliaryDimensions : primaryDimensions
+  const activeEvaluationDatasets = isAuxiliaryEvaluation ? auxiliaryRadarDatasets : primaryRadarDatasets
+  const activeEvaluationScores = isAuxiliaryEvaluation ? auxiliaryAvgScores : primaryAvgScores
+  const activeEvaluationTitle = isAuxiliaryEvaluation ? '六维辅助评价' : hasTeachingEvalDimensions ? '三维评价' : `${dimensionLabel}评价`
+  const activeEvaluationDescription = isAuxiliaryEvaluation
+    ? '课程设计、知识链、教学目标等二级维度，用于补充定位具体教学问题。'
+    : hasTeachingEvalDimensions
+      ? '知识掌握、原理理解、迁移应用作为一级核心评分，优先呈现。'
+      : '当前报告使用旧维度体系，先按已有评分维度展示。'
 
   if (!review) {
     return (
@@ -290,7 +301,6 @@ export default function ReviewDetailPage() {
   const prioritySuggestions = dedupeSuggestions(summary?.top_suggestions?.length ? summary.top_suggestions : allSuggestions).slice(0, 10)
   const strengths = (summary?.strengths || []).slice(0, 4)
   const painPoints = (summary?.pain_points || []).slice(0, 4)
-  const dimensionLabel = chartDimensions.length === 3 ? '三维评价' : chartDimensions.length === 6 ? '六维度' : `${chartDimensions.length}维度`
   const documentText = review.document?.raw_content || ''
   const normalizedEvidence = activeEvidence?.trim() || ''
   const evidenceIndex = normalizedEvidence ? documentText.indexOf(normalizedEvidence) : -1
@@ -866,85 +876,74 @@ export default function ReviewDetailPage() {
         {radarDatasets.length > 0 ? (
           <Card className={cn('rounded-[28px]', hasTeachingEvalDimensions && 'border-primary-200 bg-primary-50/30')}>
             <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">Primary Evaluation</p>
-                  <h2 className="mt-1 text-lg font-semibold text-gray-900">
-                    {hasTeachingEvalDimensions ? '三维评价' : `${dimensionLabel}评价`}
-                  </h2>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">Evaluation</p>
+                  <h2 className="mt-1 text-lg font-semibold text-gray-900">{activeEvaluationTitle}</h2>
                   <p className="mt-1 text-xs leading-6 text-gray-500">
-                    {hasTeachingEvalDimensions
-                      ? '知识掌握、原理理解、迁移应用作为一级核心评分，优先呈现。'
-                      : '当前报告使用旧维度体系，先按已有评分维度展示。'}
+                    {activeEvaluationDescription}
                   </p>
                 </div>
-                {hasTeachingEvalDimensions ? <Badge variant="primary">一级主评分</Badge> : null}
+                {hasTeachingEvalDimensions ? (
+                  <div className="flex shrink-0 rounded-full border border-primary-100 bg-white p-1 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => setActiveEvaluationView('primary')}
+                      className={cn(
+                        'rounded-full border-0 px-4 py-1.5 text-xs font-semibold transition-colors',
+                        activeEvaluationView === 'primary'
+                          ? 'bg-primary-600 text-white shadow-sm'
+                          : 'bg-transparent text-gray-600 hover:text-primary-700'
+                      )}
+                    >
+                      三维主评
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveEvaluationView('auxiliary')}
+                      disabled={auxiliaryDimensions.length === 0}
+                      className={cn(
+                        'rounded-full border-0 px-4 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+                        activeEvaluationView === 'auxiliary'
+                          ? 'bg-primary-600 text-white shadow-sm'
+                          : 'bg-transparent text-gray-600 hover:text-primary-700'
+                      )}
+                    >
+                      六维辅助
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </CardHeader>
             <CardContent className="grid gap-5 p-6 xl:grid-cols-[1fr_0.95fr]">
-              <div className="flex justify-center">
-                <RadarChart datasets={primaryRadarDatasets} dimensions={primaryDimensions} size={320} />
-              </div>
-              <div className="space-y-3">
-                {primaryAvgScores.map((item) => (
-                  <div key={item.name} className="rounded-2xl border border-primary-100 bg-white px-4 py-3">
-                    <div className="mb-2 flex items-center justify-between text-sm">
-                      <span className="font-semibold text-gray-800">{item.name}</span>
-                      <span className="font-bold text-primary-700">{item.avg.toFixed(1)}/5</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-primary-50">
-                      <div className="h-full rounded-full bg-primary-500" style={{ width: `${item.avg * 20}%` }} />
-                    </div>
+              {activeEvaluationDimensions.length > 0 ? (
+                <>
+                  <div className="flex justify-center">
+                    <RadarChart datasets={activeEvaluationDatasets} dimensions={activeEvaluationDimensions} size={isAuxiliaryEvaluation ? 300 : 320} />
                   </div>
-                ))}
-              </div>
+                  <div className={cn('space-y-3', isAuxiliaryEvaluation && 'grid gap-3 space-y-0 sm:grid-cols-2 xl:block xl:space-y-3')}>
+                    {activeEvaluationScores.map((item) => (
+                      <div key={item.name} className="rounded-2xl border border-primary-100 bg-white px-4 py-3">
+                        <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                          <span className="font-semibold text-gray-800">{item.name}</span>
+                          <span className="shrink-0 font-bold text-primary-700">{item.avg.toFixed(1)}/5</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-primary-50">
+                          <div className="h-full rounded-full bg-primary-500" style={{ width: `${item.avg * 20}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500 xl:col-span-2">
+                  当前报告没有生成六维辅助评分数据。
+                </div>
+              )}
             </CardContent>
           </Card>
         ) : null}
       </section>
-
-      {hasTeachingEvalDimensions ? (
-        <section className="dm-stage-reveal" style={{ ['--reveal-delay' as string]: '150ms' }}>
-          <Card className="rounded-[28px] border-gray-200">
-            <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500">Auxiliary Evaluation</p>
-                <h2 className="mt-1 text-base font-semibold text-gray-900">六维辅助评价</h2>
-                <p className="mt-1 text-xs leading-6 text-gray-500">课程设计、知识链等 6 维作为二级辅助维度，默认折叠。</p>
-              </div>
-              <Button variant="secondary" size="sm" onClick={() => setShowAuxiliaryDimensions((previous) => !previous)}>
-                {showAuxiliaryDimensions ? '收起六维' : '展开六维'}
-              </Button>
-            </CardHeader>
-            {showAuxiliaryDimensions ? (
-              <CardContent className="grid gap-5 p-6 xl:grid-cols-[1fr_0.95fr]">
-                {auxiliaryDimensions.length > 0 ? (
-                  <>
-                    <div className="flex justify-center">
-                      <RadarChart datasets={auxiliaryRadarDatasets} dimensions={auxiliaryDimensions} size={280} />
-                    </div>
-                    <div className="space-y-2">
-                      {auxiliaryAvgScores.map((item) => (
-                        <div key={item.name} className="flex items-center gap-2 text-xs">
-                          <span className="w-16 shrink-0 text-right text-gray-500">{item.name}</span>
-                          <div className="h-2 flex-1 rounded-full bg-gray-100">
-                            <div className="h-full rounded-full bg-gray-500" style={{ width: `${item.avg * 20}%` }} />
-                          </div>
-                          <span className="w-6 text-right font-medium text-gray-600">{item.avg.toFixed(1)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 xl:col-span-2">
-                    当前报告没有生成六维辅助评分数据。
-                  </div>
-                )}
-              </CardContent>
-            ) : null}
-          </Card>
-        </section>
-      ) : null}
 
       {tifenReport ? (
         <section className="dm-stage-reveal" style={{ ['--reveal-delay' as string]: '165ms' }}>
