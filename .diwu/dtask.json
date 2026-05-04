@@ -24,7 +24,7 @@
       ],
       "category": "functional",
       "blocked_by": [],
-      "status": "InDraft"
+      "status": "InSpec"
     },
     {
       "id": 2,
@@ -47,7 +47,7 @@
       ],
       "category": "functional",
       "blocked_by": [1],
-      "status": "InDraft"
+      "status": "InSpec"
     },
     {
       "id": 3,
@@ -75,7 +75,7 @@
       ],
       "category": "ui",
       "blocked_by": [],
-      "status": "InDraft"
+      "status": "InSpec"
     },
     {
       "id": 4,
@@ -96,7 +96,7 @@
       ],
       "category": "ui",
       "blocked_by": [],
-      "status": "InDraft"
+      "status": "InSpec"
     },
     {
       "id": 5,
@@ -116,7 +116,7 @@
       ],
       "category": "ui",
       "blocked_by": [],
-      "status": "InDraft"
+      "status": "InSpec"
     },
     {
       "id": 6,
@@ -139,7 +139,7 @@
       ],
       "category": "functional",
       "blocked_by": [],
-      "status": "InDraft"
+      "status": "InSpec"
     },
     {
       "id": 7,
@@ -161,7 +161,7 @@
       ],
       "category": "functional",
       "blocked_by": [],
-      "status": "InDraft"
+      "status": "InSpec"
     },
     {
       "id": 8,
@@ -183,7 +183,7 @@
       ],
       "category": "ui",
       "blocked_by": [],
-      "status": "InDraft"
+      "status": "InSpec"
     },
     {
       "id": 9,
@@ -209,7 +209,7 @@
       ],
       "category": "ui",
       "blocked_by": [],
-      "status": "InDraft"
+      "status": "InSpec"
     },
     {
       "id": 10,
@@ -233,7 +233,7 @@
       ],
       "category": "functional",
       "blocked_by": [],
-      "status": "InReview"
+      "status": "Done"
     },
     {
       "id": 11,
@@ -254,8 +254,8 @@
         "D:/vibe coding/User_web/frontend/src/components/ui/RadarChart.tsx"
       ],
       "category": "ui",
-      "blocked_by": [10],
-      "status": "InDraft"
+      "blocked_by": [],
+      "status": "InSpec"
     },
     {
       "id": 12,
@@ -278,8 +278,8 @@
         "D:/vibe coding/User_web/frontend/src/pages/reviews/ReviewDetailPage.tsx"
       ],
       "category": "functional",
-      "blocked_by": [10],
-      "status": "InDraft"
+      "blocked_by": [],
+      "status": "InSpec"
     }
   ]
 }
