@@ -21,6 +21,7 @@ import { toast } from '@/components/ui/Toast'
 import { RadarChart } from '@/components/ui/RadarChart'
 import { TEACHING_DIMENSIONS, TEACHING_EVAL_DIMENSIONS } from '@/types'
 import type { AgentReview, Suggestion } from '@/types'
+import { buildFallbackTifenReport } from '@/services/teachingPrompts'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
@@ -71,6 +72,28 @@ function cleanReportLine(line: string) {
     .trim()
 }
 
+function isTifenSectionTitle(line: string) {
+  return (
+    line.length <= 32 &&
+    !/[。！？；;]$/.test(line) &&
+    /(提分|升学|竞赛|密考|分数|建议|优化|训练|检测|路径|策略|拆解|辨析|准确率|应用|复盘|巩固)/.test(line)
+  )
+}
+
+function isIncompleteTifenReport(report: string) {
+  const compact = report.replace(/\s+/g, '')
+  const lines = report.split(/\r?\n/).map(cleanReportLine).filter(Boolean)
+  const lastLine = lines[lines.length - 1] || ''
+
+  return (
+    compact.length < 240 ||
+    (
+      isTifenSectionTitle(lastLine) &&
+      !/[。！？；;]$/.test(lastLine)
+    )
+  )
+}
+
 function formatTifenReport(report: string): TifenSection[] {
   const rawLines = report
     .split(/\r?\n/)
@@ -90,12 +113,7 @@ function formatTifenReport(report: string): TifenSection[] {
   }
 
   for (const line of rawLines) {
-    const looksLikeTitle =
-      line.length <= 24 &&
-      !/[。！？；：:，,]/.test(line) &&
-      /(提分|升学|竞赛|密考|分数|建议|优化|训练|检测|路径|策略)/.test(line)
-
-    if (looksLikeTitle) {
+    if (isTifenSectionTitle(line)) {
       flush()
       current = { title: line, paragraphs: [] }
       continue
@@ -109,10 +127,7 @@ function formatTifenReport(report: string): TifenSection[] {
     return [{ title: '提分思路', paragraphs: rawLines }]
   }
 
-  return sections.map((section) => ({
-    title: section.title,
-    paragraphs: section.paragraphs.slice(0, 3),
-  }))
+  return sections
 }
 
 export default function ReviewDetailPage() {
@@ -236,10 +251,16 @@ export default function ReviewDetailPage() {
     () => avgDimScores.filter((dimension) => auxiliaryDimensions.includes(dimension.name as (typeof auxiliaryDimensions)[number])),
     [auxiliaryDimensions, avgDimScores],
   )
-  const tifenReport = review?.tifenReport?.trim()
+  const savedTifenReport = review?.tifenReport?.trim()
+  const tifenReport = savedTifenReport && !isIncompleteTifenReport(savedTifenReport)
+    ? savedTifenReport
+    : review?.document && completedReviews.length > 0
+      ? buildFallbackTifenReport(review.document, completedReviews)
+      : savedTifenReport
   const tifenSections = useMemo(() => formatTifenReport(tifenReport || ''), [tifenReport])
-  const isLongTifenReport = (tifenReport?.length || 0) > 520 || tifenSections.length > 3
-  const visibleTifenSections = isLongTifenReport && !isTifenExpanded ? tifenSections.slice(0, 2) : tifenSections
+  const tifenParagraphCount = tifenSections.reduce((sum, section) => sum + section.paragraphs.length, 0)
+  const isLongTifenReport = (tifenReport?.length || 0) > 760 || tifenSections.length > 3 || tifenParagraphCount > 6
+  const visibleTifenSections = tifenSections
   const dimensionLabel = chartDimensions.length === 3 ? '三维评价' : chartDimensions.length === 6 ? '六维度' : `${chartDimensions.length}维度`
   const isAuxiliaryEvaluation = hasTeachingEvalDimensions && activeEvaluationView === 'auxiliary'
   const activeEvaluationDimensions = isAuxiliaryEvaluation ? auxiliaryDimensions : primaryDimensions
@@ -952,7 +973,9 @@ export default function ReviewDetailPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">AI Suggestion Report</p>
                 <h2 className="mt-1 text-base font-semibold text-gray-900">提分思路</h2>
-                <p className="mt-1 text-xs leading-6 text-gray-500">按中文短报告规整呈现，长内容默认收起，便于快速阅读。</p>
+                <p className="mt-1 text-xs leading-6 text-gray-500">
+                  {isLongTifenReport ? '按中文短报告规整呈现，长内容默认收起，便于快速阅读。' : '内容较短，已直接完整展示。'}
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="primary">AI建议报告</Badge>
@@ -964,16 +987,18 @@ export default function ReviewDetailPage() {
               </div>
             </CardHeader>
             <CardContent className="p-6">
-              <div className={cn('space-y-5', isLongTifenReport && !isTifenExpanded && 'max-h-72 overflow-hidden')}>
+              <div className={cn('space-y-5', isLongTifenReport && !isTifenExpanded && 'max-h-80 overflow-hidden')}>
                 {visibleTifenSections.map((section, index) => (
                   <article key={`${section.title}-${index}`} className="border-l-2 border-primary-200 pl-4">
                     <h3 className="text-sm font-semibold text-gray-950">{section.title}</h3>
                     <div className="mt-2 space-y-2">
-                      {section.paragraphs.map((paragraph) => (
+                      {section.paragraphs.length > 0 ? section.paragraphs.map((paragraph) => (
                         <p key={paragraph} className="text-[15px] leading-8 text-gray-700">
                           {paragraph}
                         </p>
-                      ))}
+                      )) : (
+                        <p className="text-[15px] leading-8 text-gray-500">暂无展开说明。</p>
+                      )}
                     </div>
                   </article>
                 ))}

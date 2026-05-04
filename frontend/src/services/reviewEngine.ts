@@ -545,7 +545,27 @@ export async function generateTifenReport(
     signal,
   )
 
-  return fullText.trim() || buildFallbackTifenReport(doc, agentReviews)
+  const normalizedText = fullText.trim()
+  if (!normalizedText || isIncompleteTifenReport(normalizedText)) {
+    return buildFallbackTifenReport(doc, agentReviews)
+  }
+
+  return normalizedText
+}
+
+function isIncompleteTifenReport(report: string) {
+  const compact = report.replace(/\s+/g, '')
+  const lines = report.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  const lastLine = lines[lines.length - 1] || ''
+
+  return (
+    compact.length < 240 ||
+    (
+      lastLine.length <= 32 &&
+      /(提分|升学|竞赛|密考|分数|建议|优化|训练|检测|路径|策略|拆解|辨析|准确率|应用|复盘|巩固)/.test(lastLine) &&
+      !/[。！？；;]$/.test(lastLine)
+    )
+  )
 }
 
 function collectSuggestions(agentReviews: AgentReview[]) {

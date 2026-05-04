@@ -62,18 +62,20 @@ export function buildFallbackTifenReport(document: Document, agentReviews: Agent
   const dimensionLines = agentReviews
     .flatMap((review) => review.dimensions)
     .slice(0, 6)
-    .map((dimension) => `- ${dimension.name}：${dimension.comment || `${dimension.score.toFixed(1)} 分，需继续细化提分动作。`}`)
+    .map((dimension) => `${dimension.name}：${dimension.comment || `${dimension.score.toFixed(1)} 分，需继续细化提分动作。`}`)
+    .join('；')
+  const suggestionText = topSuggestions.length
+    ? topSuggestions.map((suggestion) => `${suggestion.title || '建议'}：${suggestion.content}`).join('；')
+    : '建议设置课前诊断、课中变式、课后错因复盘三段检测，确保每个动作都有分数反馈。'
 
   return [
-    `提分与升学`,
-    `围绕《${document.title}》的当前评审结果，优先把知识点掌握、原理理解和迁移应用转化为可检测的课堂产出。`,
+    '提分与升学',
+    `围绕《${document.title}》的当前评审结果，优先把知识掌握、原理理解和迁移应用转化为可检测的课堂产出。每个知识点建议绑定一道基础题、一道变式题和一道限时检测题，让学生在课堂内完成从会听到会做的闭环。`,
     '',
-    `竞赛支持与密考应对`,
-    dimensionLines.length ? dimensionLines.join('\n') : '- 暂无明确维度评语，建议先补充变式题和限时检测。',
+    '竞赛支持与密考应对',
+    dimensionLines || '暂无明确维度评语，建议先补充变式题和限时检测。',
     '',
-    `分数产出优化`,
-    topSuggestions.length
-      ? topSuggestions.map((suggestion) => `- ${suggestion.title || '建议'}：${suggestion.content}`).join('\n')
-      : '- 建议设置课前诊断、课中变式、课后错因复盘三段检测，确保每个动作都有分数反馈。',
+    '分数产出优化',
+    `${suggestionText} 课堂结束前应保留 3-5 分钟进行错因归类，把公式记忆、条件识别、步骤书写和迁移应用分开统计，便于下一讲直接补短板。`,
   ].join('\n')
 }
