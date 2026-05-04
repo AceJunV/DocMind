@@ -131,10 +131,28 @@ export interface Review {
   overall_score?: number
   agent_reviews?: AgentReview[]
   summary?: ReviewSummary
+  compareReport?: CompareReviewReport
   status: 'in_progress' | 'completed'
   created_at: string
   document?: Document
   agents?: Agent[]
+}
+
+export interface DiffPointReview {
+  pointIndex: number
+  diffType: string
+  oldText: string
+  newText: string
+  isCore: boolean
+  isNecessary: boolean
+  alignsWithKnowledge: boolean
+  comment: string
+}
+
+export interface CompareReviewReport {
+  pointReviews: DiffPointReview[]
+  overview: string
+  overallAssessment: string
 }
 
 export interface AgentReview {

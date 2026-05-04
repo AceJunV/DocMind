@@ -1,4 +1,4 @@
-import type { Agent, AgentColor, Document, AgentReview, Suggestion, ReviewSummary, TeachingEvalDimension } from '@/types'
+import type { Agent, AgentColor, CompareReviewReport, DiffPoint, DiffPointReview, DiffResult, Document, AgentReview, Suggestion, ReviewSummary, TeachingEvalDimension } from '@/types'
 import { TEACHING_DIMENSIONS, TEACHING_EVAL_DIMENSIONS } from '@/types'
 import { chatCompletion } from './llmService'
 import { createId } from '@/utils/id'
@@ -678,5 +678,134 @@ ${agentSummaries}
     }
   } catch {
     return fallbackSummary
+  }
+}
+
+// 对比评审解析类型（内部使用）
+type ParsedDiffPointReview = {
+  pointIndex?: number
+  isCore?: boolean
+  isNecessary?: boolean
+  alignsWithKnowledge?: boolean
+  comment?: string
+}
+
+type ParsedComparePayload = {
+  pointReviews?: ParsedDiffPointReview[]
+  overview?: string
+  overallAssessment?: string
+}
+
+const COMPARE_REVIEW_SYSTEM_PROMPT = (agent: Agent) => `${agent.system_prompt}
+
+你必须使用简体中文回复。
+
+你现在正在执行一份教研案对比评审任务，必须严格站在「${agent.name}」的身份与视角说话。
+
+你面前是一份教案修改前后的 diff 对比结果。请逐条评审每个修改点，评估：
+1. 是否为核心修改（isCore）：该修改是否触及教学核心内容
+2. 是否为必要修改（isNecessary）：该修改是否必要、合理
+3. 是否贴合知识点（alignsWithKnowledge）：修改是否有助于知识传递
+
+评审要求：
+- 每个 diff 点都要有独立评审意见（comment），说明修改的合理性
+- 不要只复述 diff 内容，要判断修改背后的教学意图和效果
+- 最后给出整体评价概述（overview）和总体评估（overallAssessment）
+
+只输出 JSON，不要输出 Markdown，不要输出解释，不要输出代码块。
+{
+  "pointReviews": [
+    {
+      "pointIndex": 0,
+      "isCore": true,
+      "isNecessary": true,
+      "alignsWithKnowledge": true,
+      "comment": "对这一修改点的评审意见"
+    }
+  ],
+  "overview": "2-3 句整体概述",
+  "overallAssessment": "总体评估，聚焦修改的整体质量和教学效果"
+}`
+
+function buildDiffContext(diffResult: DiffResult): string {
+  return diffResult.points
+    .filter((p) => p.type !== 'equal')
+    .map((p, i) => {
+      const label = p.type === 'add' ? '[新增]' : '[删除]'
+      return `### Diff ${i}\n类型: ${label}\n内容:\n${p.text.trim()}`
+    })
+    .join('\n\n')
+}
+
+export async function executeCompareReview(
+  agent: Agent,
+  diffResult: DiffResult,
+  onProgress: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<CompareReviewReport> {
+  const diffContext = buildDiffContext(diffResult)
+
+  const rawText = await collectCompletionText(
+    [
+      { role: 'system', content: COMPARE_REVIEW_SYSTEM_PROMPT(agent) },
+      {
+        role: 'user',
+        content: `请对以下教案修改 diff 进行逐条评审。
+
+【修改前文件】${diffResult.oldFileName}
+【修改后文件】${diffResult.newFileName}
+【变更统计】新增 ${diffResult.stats.additions} 处、删除 ${diffResult.stats.deletions} 处
+
+【Diff 详情】
+${diffContext}`,
+      },
+    ],
+    signal,
+    onProgress,
+  )
+
+  const parsed = parseJsonCandidate<ParsedComparePayload>(rawText)
+
+  if (!parsed) {
+    const pointReviews: DiffPointReview[] = diffResult.points
+      .filter((p) => p.type !== 'equal')
+      .map((p, i) => ({
+        pointIndex: i,
+        diffType: p.type,
+        oldText: p.type === 'delete' ? p.text : '',
+        newText: p.type === 'add' ? p.text : '',
+        isCore: false,
+        isNecessary: true,
+        alignsWithKnowledge: true,
+        comment: '评审解析失败，请重试',
+      }))
+
+    return {
+      pointReviews,
+      overview: rawText.trim().slice(0, 300) || '评审解析失败',
+      overallAssessment: '未能生成有效评审，请重试',
+    }
+  }
+
+  const pointReviews: DiffPointReview[] = diffResult.points
+    .filter((p) => p.type !== 'equal')
+    .map((p, i) => {
+      const review = parsed.pointReviews?.find((r) => r.pointIndex === i)
+      return {
+        pointIndex: i,
+        diffType: p.type,
+        oldText: p.type === 'delete' ? p.text : '',
+        newText: p.type === 'add' ? p.text : '',
+        isCore: review?.isCore ?? false,
+        isNecessary: review?.isNecessary ?? true,
+        alignsWithKnowledge: review?.alignsWithKnowledge ?? true,
+        comment: review?.comment?.trim() || '无评审意见',
+      }
+    })
+
+  return {
+    pointReviews,
+    overview: parsed.overview?.trim() || '评审完成',
+    overallAssessment: parsed.overallAssessment?.trim() || '评审完成',
   }
 }
