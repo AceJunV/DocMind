@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, Sparkles, Check, Dices } from 'lucide-react'
+import { ArrowLeft, Loader2, Send, Sparkles, Check, Dices, Undo2, Wand2 } from 'lucide-react'
 import { AGENT_COLORS, useAgentStore } from '@/stores/agentStore'
 import { useAuthStore } from '@/stores/authStore'
-import { chatCompletion, LLMError } from '@/services/llmService'
+import { chatCompletion, LLMError, optimizePrompt, continuePrompt } from '@/services/llmService'
 import { isModelConfigValid } from '@/stores/settingsStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { toast } from '@/components/ui/Toast'
 import { createId } from '@/utils/id'
 import type { Agent, AgentColor, AgentCategory } from '@/types'
+import { cn } from '@/lib/utils'
 
 const ALL_COLORS: AgentColor[] = ['indigo', 'violet', 'pink', 'orange', 'teal', 'sky', 'slate', 'green', 'rose', 'amber', 'emerald', 'cyan']
 
@@ -84,7 +85,7 @@ E. 让用户自由描述
     "style": "说话风格描述",
     "catchphrase": "口头禅（有性格特色）"
   },
-  "system_prompt": "完整的系统提示词，包含角色身份、说话方式、专业背景、评审原则。要明确不评价课件交互逻辑和功能设计，专注于教研内容。"
+  "system_prompt": "完整的人物设定，包含角色身份、说话方式、专业背景、评审原则。要明确不评价课件交互逻辑和功能设计，专注于教研内容。"
 }
 \`\`\`
 
@@ -119,7 +120,7 @@ const RANDOM_AGENT_PROMPT = `你是教研评审平台的角色创建助手。请
     "style": "说话风格描述",
     "catchphrase": "有个性的口头禅"
   },
-  "system_prompt": "完整的系统提示词，包含教育角色身份、说话方式和评审原则。明确不评价课件交互逻辑。"
+  "system_prompt": "完整的人物设定，包含教育角色身份、说话方式和评审原则。明确不评价课件交互逻辑。"
 }`
 
 const INITIAL_MESSAGES: ChatMsg[] = [
@@ -158,10 +159,47 @@ export default function AgentCreatePage() {
     expertise: string[]; behavior: { style: string; catchphrase: string }; system_prompt: string
   } | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const [aiLoading, setAiLoading] = useState<'optimize' | 'continue' | null>(null)
+  const [undoSystemPrompt, setUndoSystemPrompt] = useState<string | null>(null)
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  const handleOptimizePreview = async () => {
+    if (!preview?.system_prompt?.trim()) return
+    setUndoSystemPrompt(preview.system_prompt)
+    setAiLoading('optimize')
+    try {
+      const result = await optimizePrompt(preview.system_prompt, {
+        onChunk: () => {},
+        onDone: (text) => setPreview((p) => p ? { ...p, system_prompt: text } : p),
+        onError: (err) => toast('error', `AI优化失败: ${err.message}`),
+      })
+      if (result) setPreview((p) => p ? { ...p, system_prompt: result } : p)
+    } catch { /* handled by onError */ } finally { setAiLoading(null) }
+  }
+
+  const handleContinuePreview = async () => {
+    if (!preview?.system_prompt?.trim()) return
+    setUndoSystemPrompt(preview.system_prompt)
+    setAiLoading('continue')
+    try {
+      const result = await continuePrompt(preview.system_prompt, {
+        onChunk: () => {},
+        onDone: (text) => setPreview((p) => p ? { ...p, system_prompt: p.system_prompt + '\n\n' + text } : p),
+        onError: (err) => toast('error', `AI续写失败: ${err.message}`),
+      })
+      if (result) setPreview((p) => p ? { ...p, system_prompt: p.system_prompt + '\n\n' + result } : p)
+    } catch { /* handled by onError */ } finally { setAiLoading(null) }
+  }
+
+  const handleUndoPreview = () => {
+    if (undoSystemPrompt !== null && preview) {
+      setPreview({ ...preview, system_prompt: undoSystemPrompt })
+      setUndoSystemPrompt(null)
+    }
+  }
 
   const processLLMResponse = (text: string) => {
     const parsed = parseAgentJSON(text)
@@ -427,6 +465,39 @@ export default function AgentCreatePage() {
                       </span>
                     ))}
                   </div>
+
+                  <div className="mb-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-gray-500">人物设定</span>
+                      <div className="flex items-center gap-1">
+                        {undoSystemPrompt !== null && (
+                          <button onClick={handleUndoPreview} className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] text-gray-400 hover:bg-gray-100 cursor-pointer border-0 bg-transparent" title="撤销">
+                            <Undo2 className="h-2.5 w-2.5" /> 撤销
+                          </button>
+                        )}
+                        <button
+                          onClick={handleOptimizePreview}
+                          disabled={!preview.system_prompt?.trim() || aiLoading !== null}
+                          className="flex items-center gap-0.5 rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {aiLoading === 'optimize' ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Wand2 className="h-2.5 w-2.5" />}
+                          AI优化
+                        </button>
+                        <button
+                          onClick={handleContinuePreview}
+                          disabled={!preview.system_prompt?.trim() || aiLoading !== null}
+                          className="flex items-center gap-0.5 rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {aiLoading === 'continue' ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Sparkles className="h-2.5 w-2.5" />}
+                          AI续写
+                        </button>
+                      </div>
+                    </div>
+                    <p className={cn('text-xs text-gray-600 leading-relaxed', !preview.system_prompt?.trim() && 'text-gray-400 italic')}>
+                      {preview.system_prompt?.trim() || '可以尝试给角色增加一些人物设定哦'}
+                    </p>
+                  </div>
+
                   {preview.behavior.catchphrase && (
                     <p className="text-xs text-gray-400 italic">"{preview.behavior.catchphrase}"</p>
                   )}

@@ -165,6 +165,90 @@ export async function chatCompletion(
   }
 }
 
+export async function optimizePrompt(
+  currentText: string,
+  callbacks: StreamCallbacks,
+  signal?: AbortSignal,
+): Promise<string> {
+  const messages: ChatMessage[] = [
+    {
+      role: 'system',
+      content: `你是一个专业的角色设定优化助手。你的任务是润色和优化用户提供的人物设定文本。
+要求：
+1. 不改变原意和核心特征
+2. 保持原有的语言风格和语气
+3. 仅优化表达，使语言更流畅、更生动、更有画面感
+4. 保留所有关键信息（角色身份、说话方式、专业背景、评审原则等）
+5. 直接输出优化后的完整文本，不要添加解释或备注`,
+    },
+    {
+      role: 'user',
+      content: `请优化以下人物设定文本：\n\n${currentText}`,
+    },
+  ]
+
+  let result = ''
+  await chatCompletion(
+    messages,
+    {
+      onChunk: (chunk) => {
+        result += chunk
+        callbacks.onChunk(chunk)
+      },
+      onDone: (text) => {
+        result = text || result
+        callbacks.onDone(result)
+      },
+      onError: (error) => callbacks.onError(error),
+    },
+    signal,
+  )
+
+  return result || currentText
+}
+
+export async function continuePrompt(
+  currentText: string,
+  callbacks: StreamCallbacks,
+  signal?: AbortSignal,
+): Promise<string> {
+  const messages: ChatMessage[] = [
+    {
+      role: 'system',
+      content: `你是一个专业的角色设定续写助手。你的任务是基于已有的人物设定，进行风格一致的扩展续写。
+要求：
+1. 延续已有设定的风格、语气和表达方式
+2. 扩展内容要与已有设定保持一致、不矛盾
+3. 扩展可以涉及：更详细的说话方式、更丰富的评审视角、更具体的关注点等
+4. 只输出续写的新内容（不要重复已有文本），以便直接附加到原文末尾
+5. 续写内容控制在2-4句话，不要过长`,
+    },
+    {
+      role: 'user',
+      content: `请基于以下已有的人物设定进行续写：\n\n${currentText}\n\n请直接输出续写内容（不要重复上面的内容）：`,
+    },
+  ]
+
+  let result = ''
+  await chatCompletion(
+    messages,
+    {
+      onChunk: (chunk) => {
+        result += chunk
+        callbacks.onChunk(chunk)
+      },
+      onDone: (text) => {
+        result = text || result
+        callbacks.onDone(result)
+      },
+      onError: (error) => callbacks.onError(error),
+    },
+    signal,
+  )
+
+  return result || currentText
+}
+
 export async function testConnection(): Promise<{ ok: boolean; message: string; model?: string }> {
   try {
     const config = getConfig()

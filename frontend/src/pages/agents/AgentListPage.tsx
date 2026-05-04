@@ -56,7 +56,7 @@ function exportAgentToMD(agent: Agent): string {
   if (agent.behavior.catchphrase) lines.push(`  catchphrase: "${agent.behavior.catchphrase}"`)
   lines.push('---')
   lines.push('')
-  lines.push('## 系统提示词')
+  lines.push('## 人物设定')
   lines.push('')
   lines.push(agent.system_prompt)
   return lines.join('\n')
@@ -82,7 +82,7 @@ function parseAgentMD(md: string): Partial<Agent> | null {
     ? [...expertiseMatch[1].matchAll(/"([^"]+)"/g)].map((m) => m[1])
     : []
 
-  const systemPrompt = body.replace(/^##\s*系统提示词\s*\n?/, '').trim()
+  const systemPrompt = body.replace(/^##\s*人物设定\s*\n?/, '').trim()
 
   const colorVal = getStr('color')
   const categoryVal = getStr('category')
@@ -654,7 +654,7 @@ function CustomAddModal({ onClose, onSaved, embedded }: { onClose: () => void; o
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">系统提示词</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">人物设定</label>
           <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={5}
             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 resize-y"
             placeholder="描述角色的身份、说话方式、专业背景和评审原则..." />
@@ -768,7 +768,7 @@ E. 让用户自由描述
   "personality": { "directness": 3, "strictness": 4, "humor": 2, "empathy": 3 },
   "expertise": ["专长1", "专长2", "专长3", "专长4"],
   "behavior": { "style": "说话风格描述", "catchphrase": "口头禅（有性格特色）" },
-  "system_prompt": "完整的系统提示词，包含角色身份、说话方式、专业背景、评审原则。要明确不评价课件交互逻辑和功能设计，专注于教研内容。"
+  "system_prompt": "完整的人物设定，包含角色身份、说话方式、专业背景、评审原则。要明确不评价课件交互逻辑和功能设计，专注于教研内容。"
 }
 \`\`\`
 
@@ -795,7 +795,7 @@ const RANDOM_AGENT_PROMPT = `你是教研评审平台的角色创建助手。请
   "personality": { "directness": 随机1-5, "strictness": 随机1-5, "humor": 随机1-5, "empathy": 随机1-5 },
   "expertise": ["专长1", "专长2", "专长3"],
   "behavior": { "style": "说话风格描述", "catchphrase": "有个性的口头禅" },
-  "system_prompt": "完整的系统提示词，包含教育角色身份、说话方式和评审原则。明确不评价课件交互逻辑。"
+  "system_prompt": "完整的人物设定，包含教育角色身份、说话方式和评审原则。明确不评价课件交互逻辑。"
 }`
 
 interface AIMsg { role: 'ai' | 'user'; content: string }

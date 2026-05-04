@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Bot, Save, History, X } from 'lucide-react'
+import { ArrowLeft, Bot, Loader2, RefreshCw, Save, Sparkles, Undo2, Wand2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgentStore, AGENT_COLORS } from '@/stores/agentStore'
+import { optimizePrompt, continuePrompt } from '@/services/llmService'
 import { toast } from '@/components/ui/Toast'
 import type { AgentColor } from '@/types'
 
@@ -27,6 +28,51 @@ export default function AgentEditPage() {
   const [humor, setHumor] = useState(agent?.personality.humor || 3)
   const [empathy, setEmpathy] = useState(agent?.personality.empathy || 3)
   const [showHistory, setShowHistory] = useState(false)
+  const [aiLoading, setAiLoading] = useState<'optimize' | 'continue' | null>(null)
+  const [undoText, setUndoText] = useState<string | null>(null)
+
+  const handleOptimize = async () => {
+    if (!systemPrompt.trim()) return
+    setUndoText(systemPrompt)
+    setAiLoading('optimize')
+    try {
+      const result = await optimizePrompt(systemPrompt, {
+        onChunk: () => {},
+        onDone: (text) => setSystemPrompt(text),
+        onError: (err) => toast('error', `AI优化失败: ${err.message}`),
+      })
+      if (result) setSystemPrompt(result)
+    } catch {
+      // error handled by onError
+    } finally {
+      setAiLoading(null)
+    }
+  }
+
+  const handleContinue = async () => {
+    if (!systemPrompt.trim()) return
+    setUndoText(systemPrompt)
+    setAiLoading('continue')
+    try {
+      const result = await continuePrompt(systemPrompt, {
+        onChunk: () => {},
+        onDone: (text) => setSystemPrompt((prev) => prev + '\n\n' + text),
+        onError: (err) => toast('error', `AI续写失败: ${err.message}`),
+      })
+      if (result) setSystemPrompt((prev) => prev + '\n\n' + result)
+    } catch {
+      // error handled by onError
+    } finally {
+      setAiLoading(null)
+    }
+  }
+
+  const handleUndo = () => {
+    if (undoText !== null) {
+      setSystemPrompt(undoText)
+      setUndoText(null)
+    }
+  }
 
   if (!agent) {
     return (
@@ -159,12 +205,51 @@ export default function AgentEditPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">系统提示词</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-gray-700">人物设定</label>
+                <div className="flex items-center gap-1">
+                  {undoText !== null && (
+                    <button
+                      onClick={handleUndo}
+                      className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 cursor-pointer border-0 bg-transparent"
+                      title="撤销AI修改"
+                    >
+                      <Undo2 className="h-3 w-3" /> 撤销
+                    </button>
+                  )}
+                  <button
+                    onClick={handleOptimize}
+                    disabled={!systemPrompt.trim() || aiLoading !== null}
+                    className="flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    title="AI优化润色人物设定"
+                  >
+                    {aiLoading === 'optimize' ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Wand2 className="h-3 w-3" />
+                    )}
+                    AI优化
+                  </button>
+                  <button
+                    onClick={handleContinue}
+                    disabled={!systemPrompt.trim() || aiLoading !== null}
+                    className="flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    title="AI续写扩展人物设定"
+                  >
+                    {aiLoading === 'continue' ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3 w-3" />
+                    )}
+                    AI续写
+                  </button>
+                </div>
+              </div>
               <textarea
-                value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)}
+                value={systemPrompt} onChange={(e) => { setSystemPrompt(e.target.value); setUndoText(null) }}
                 rows={6}
                 className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 resize-y"
-                placeholder="角色的系统提示词..."
+                placeholder={systemPrompt.trim() ? '' : '可以尝试给角色增加一些人物设定哦'}
               />
             </div>
           </div>

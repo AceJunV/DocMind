@@ -47,7 +47,7 @@
       ],
       "category": "functional",
       "blocked_by": [],
-      "status": "InReview"
+      "status": "Done"
     },
     {
       "id": 3,
@@ -75,7 +75,7 @@
       ],
       "category": "ui",
       "blocked_by": [],
-      "status": "InSpec"
+      "status": "InReview"
     },
     {
       "id": 4,
