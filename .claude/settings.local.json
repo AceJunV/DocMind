@@ -28,7 +28,18 @@
       "Bash(npx npm-check *)",
       "Bash(python3 -c ' *)",
       "Bash(git *)",
-      "WebFetch(domain:api-docs.deepseek.com)"
+      "WebFetch(domain:api-docs.deepseek.com)",
+      "Bash(python3 *)",
+      "Read(//c/Users/rex_y/.claude/skills/**)",
+      "Read(//c/Users/rex_y/.claude/plugins/**)",
+      "Bash(gh auth *)",
+      "Bash(gh repo *)",
+      "PowerShell(winget install *)",
+      "PowerShell(scoop install *)",
+      "Bash(unzip -o gh_2.92.0_windows_amd64.zip -d /tmp/gh_extract)",
+      "Read(//tmp/gh_extract/**)",
+      "Bash(export PATH=\"$PATH:/c/Users/rex_y/AppData/Local/gh_portable/bin\")",
+      "Bash(gh pr create --repo ssdiwu/diwu-flow --head RexYoung000:feature/dref --base main --title '[Feature] 新增 dref Skill — 需求细化清单方法论' --body ' *)"
     ]
   }
 }

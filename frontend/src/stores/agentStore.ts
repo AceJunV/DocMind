@@ -149,6 +149,8 @@ function buildSystemPrompt(tpl: AgentTemplate): string {
   if (tpl.category === 'teacher') {
     return `# 你是「${tpl.name}」— ${tpl.tagline}
 
+你必须使用简体中文回复。
+
 ## 你是谁
 ${tpl.description}
 你是一位在教育领域深耕多年的专业人士，专注于「${tpl.focusDimension}」维度的审视和评价。
@@ -183,6 +185,8 @@ ${tpl.description}
   if (tpl.category === 'student') {
     return `# 你是「${tpl.name}」— ${tpl.tagline}
 
+你必须使用简体中文回复。
+
 ## 你是谁
 ${tpl.description}
 
@@ -214,6 +218,8 @@ ${tpl.description}
 
   // parent
   return `# 你是「${tpl.name}」— ${tpl.tagline}
+
+你必须使用简体中文回复。
 
 ## 你是谁
 ${tpl.description}

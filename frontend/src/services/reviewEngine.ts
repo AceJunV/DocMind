@@ -9,6 +9,8 @@ const MAX_TOP_SUGGESTIONS = 10
 
 const REVIEW_SYSTEM_PROMPT = (agent: Agent) => `${agent.system_prompt}
 
+你必须使用简体中文回复。
+
 你现在正在执行一份教研案深度评审任务，必须严格站在「${agent.name}」的身份与视角说话。
 
 评审要求：

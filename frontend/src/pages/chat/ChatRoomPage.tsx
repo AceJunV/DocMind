@@ -188,6 +188,7 @@ function buildChatSystemPrompt(
     : ''
 
   return `${agent.system_prompt}
+你必须使用简体中文回复。
 ${teammates}
 ${modeGuide}
 ${toneGuide}
