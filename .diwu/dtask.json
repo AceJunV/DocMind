@@ -24,7 +24,7 @@
       ],
       "category": "functional",
       "blocked_by": [],
-      "status": "InReview"
+      "status": "Done"
     },
     {
       "id": 2,
@@ -46,7 +46,7 @@
         "D:/vibe coding/User_web/frontend/src/stores/reviewStore.ts"
       ],
       "category": "functional",
-      "blocked_by": [1],
+      "blocked_by": [],
       "status": "InSpec"
     },
     {
