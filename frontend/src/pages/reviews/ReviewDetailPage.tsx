@@ -136,12 +136,10 @@ export default function ReviewDetailPage() {
   const review = useReviewStore((state) => state.reviews.find((item) => item.id === id))
   const toggleSuggestionAdopted = useReviewStore((state) => state.toggleSuggestionAdopted)
   const reportTopRef = useRef<HTMLDivElement>(null)
-  const evidenceRef = useRef<HTMLDivElement>(null)
   const [showKeyInsights, setShowKeyInsights] = useState(true)
   const [activeEvaluationView, setActiveEvaluationView] = useState<'primary' | 'auxiliary'>('primary')
   const [isTifenExpanded, setIsTifenExpanded] = useState(false)
   const [agentDimensionViews, setAgentDimensionViews] = useState<Record<string, 'primary' | 'auxiliary'>>({})
-  const [activeEvidence, setActiveEvidence] = useState<string | null>(null)
   const agentReviews = useMemo(() => review?.agent_reviews || [], [review?.agent_reviews])
   const completedReviews = useMemo(
     () => agentReviews.filter((item) => item.status !== 'failed'),
@@ -322,23 +320,6 @@ export default function ReviewDetailPage() {
   const prioritySuggestions = dedupeSuggestions(summary?.top_suggestions?.length ? summary.top_suggestions : allSuggestions).slice(0, 10)
   const strengths = (summary?.strengths || []).slice(0, 4)
   const painPoints = (summary?.pain_points || []).slice(0, 4)
-  const documentText = review.document?.raw_content || ''
-  const normalizedEvidence = activeEvidence?.trim() || ''
-  const evidenceIndex = normalizedEvidence ? documentText.indexOf(normalizedEvidence) : -1
-  const evidenceContext = normalizedEvidence && documentText
-    ? evidenceIndex < 0
-      ? documentText.slice(0, 800)
-      : documentText.slice(Math.max(0, evidenceIndex - 260), Math.min(documentText.length, evidenceIndex + normalizedEvidence.length + 360))
-    : ''
-
-  const scrollToEvidence = (evidence: string) => {
-    setActiveEvidence(evidence)
-    window.setTimeout(() => evidenceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0)
-  }
-
-  const scrollBackToReport = () => {
-    reportTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
 
   const buildReportMarkdown = () => {
     const lines = [
@@ -645,39 +626,11 @@ export default function ReviewDetailPage() {
                       </div>
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-3">
-                      {hasTeachingEvalDimensions ? (
-                        <div className="flex rounded-full border border-gray-200 bg-gray-50 p-1">
-                          <button
-                            type="button"
-                            onClick={() => setAgentDimensionView(item.agent_id, 'primary')}
-                            className={cn(
-                              'rounded-full border-0 px-3 py-1 text-xs font-medium transition-colors',
-                              dimensionView === 'primary' ? 'bg-white text-primary-700 shadow-sm' : 'bg-transparent text-gray-500 hover:text-gray-700'
-                            )}
-                          >
-                            三维
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setAgentDimensionView(item.agent_id, 'auxiliary')}
-                            disabled={!hasAuxiliaryDimensions(item)}
-                            className={cn(
-                              'rounded-full border-0 px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
-                              dimensionView === 'auxiliary' ? 'bg-white text-primary-700 shadow-sm' : 'bg-transparent text-gray-500 hover:text-gray-700'
-                            )}
-                          >
-                            六维
-                          </button>
-                        </div>
-                      ) : null}
-
-                      <div className="text-right">
-                        <p className="text-2xl font-bold" style={{ color: AGENT_COLORS[item.agent_color] }}>
-                          {item.score.toFixed(1)}
-                        </p>
-                        <Badge variant={getScoreTone(item.score)}>角色评分</Badge>
-                      </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-2xl font-bold" style={{ color: AGENT_COLORS[item.agent_color] }}>
+                        {item.score.toFixed(1)}
+                      </p>
+                      <Badge variant={getScoreTone(item.score)}>角色评分</Badge>
                     </div>
                   </div>
 
@@ -694,7 +647,39 @@ export default function ReviewDetailPage() {
                     </div>
                   ) : null}
 
-                  <div className="grid gap-3 md:grid-cols-2">
+                  {hasTeachingEvalDimensions ? (
+                    <div className="mb-4 flex justify-end">
+                      <div className="flex rounded-full border border-primary-100 bg-white p-1 shadow-sm">
+                        <button
+                          type="button"
+                          onClick={() => setAgentDimensionView(item.agent_id, 'primary')}
+                          className={cn(
+                            'rounded-full border-0 px-4 py-1.5 text-xs font-semibold transition-all duration-200',
+                            dimensionView === 'primary'
+                              ? 'bg-primary-600 text-white shadow-sm'
+                              : 'bg-transparent text-gray-600 hover:text-primary-700'
+                          )}
+                        >
+                          三维
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAgentDimensionView(item.agent_id, 'auxiliary')}
+                          disabled={!hasAuxiliaryDimensions(item)}
+                          className={cn(
+                            'rounded-full border-0 px-4 py-1.5 text-xs font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40',
+                            dimensionView === 'auxiliary'
+                              ? 'bg-primary-600 text-white shadow-sm'
+                              : 'bg-transparent text-gray-600 hover:text-primary-700'
+                          )}
+                        >
+                          六维
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div key={`${item.agent_id}-${dimensionView}`} className="grid gap-3 md:grid-cols-2 dm-panel-swap">
                     {displayDimensions(item).map((dimension) => (
                       <div key={dimension.name} className="rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
                         <div className="mb-2 flex items-center justify-between text-xs">
@@ -709,12 +694,10 @@ export default function ReviewDetailPage() {
                         </div>
                         {dimension.comment ? <p className="text-xs leading-6 text-gray-600">{dimension.comment}</p> : null}
                         {dimension.evidence ? (
-                          <button
-                            onClick={() => scrollToEvidence(dimension.evidence || '')}
-                            className="mt-3 w-full rounded-xl border border-primary-100 bg-white px-3 py-2 text-left text-xs leading-5 text-primary-700 transition-colors hover:bg-primary-50"
-                          >
-                            证据：{dimension.evidence}
-                          </button>
+                          <div className="mt-3 rounded-xl border border-primary-100 bg-white px-3 py-2">
+                            <p className="text-[11px] font-semibold text-primary-600">引用原文</p>
+                            <p className="mt-1 text-xs leading-5 text-gray-700">{dimension.evidence}</p>
+                          </div>
                         ) : null}
                       </div>
                     ))}
@@ -816,24 +799,6 @@ export default function ReviewDetailPage() {
           </div>
         ) : null}
       </section>
-
-      {activeEvidence ? (
-        <section ref={evidenceRef} className="rounded-[28px] border border-primary-200 bg-primary-50/70 p-5 shadow-sm dm-stage-reveal" style={{ ['--reveal-delay' as string]: '80ms' }}>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">Evidence Locator</p>
-              <h2 className="mt-1 text-lg font-semibold text-gray-900">原文证据定位</h2>
-            </div>
-            <Button variant="secondary" size="sm" onClick={scrollBackToReport}>返回报告</Button>
-          </div>
-          <div className="rounded-2xl bg-white p-4">
-            <p className="mb-3 text-sm font-medium text-primary-700">当前证据：{activeEvidence}</p>
-            <p className="max-h-64 overflow-y-auto whitespace-pre-wrap text-sm leading-7 text-gray-700">
-              {evidenceContext || '当前文档没有可定位的原文内容。'}
-            </p>
-          </div>
-        </section>
-      ) : null}
 
       {failedReviews.length > 0 ? (
         <section className="rounded-[28px] border border-red-200 bg-red-50/70 p-5 dm-stage-reveal" style={{ ['--reveal-delay' as string]: '80ms' }}>
@@ -948,9 +913,9 @@ export default function ReviewDetailPage() {
                 ) : null}
               </div>
             </CardHeader>
-            <CardContent className="grid gap-5 p-6 xl:grid-cols-[1fr_0.95fr]">
+            <CardContent>
               {activeEvaluationDimensions.length > 0 ? (
-                <>
+                <div key={activeEvaluationView} className="grid gap-5 p-6 xl:grid-cols-[1fr_0.95fr] dm-panel-swap">
                   <div className="flex justify-center">
                     <RadarChart datasets={activeEvaluationDatasets} dimensions={activeEvaluationDimensions} size={isAuxiliaryEvaluation ? 300 : 320} />
                   </div>
@@ -967,9 +932,9 @@ export default function ReviewDetailPage() {
                       </div>
                     ))}
                   </div>
-                </>
+                </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500 xl:col-span-2">
+                <div key={activeEvaluationView} className="m-6 rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500 dm-panel-swap">
                   当前报告没有生成六维辅助评分数据。
                 </div>
               )}
@@ -1136,13 +1101,8 @@ export default function ReviewDetailPage() {
 
                       {suggestion.evidence ? (
                         <div className="mt-3 rounded-2xl bg-gray-50 p-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500">证据</p>
-                          <button
-                            onClick={() => scrollToEvidence(suggestion.evidence || '')}
-                            className="mt-1 w-full rounded-xl border border-transparent px-0 py-1 text-left text-sm leading-7 text-primary-700 transition-colors hover:border-primary-100 hover:bg-white hover:px-3"
-                          >
-                            {suggestion.evidence}
-                          </button>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500">引用原文</p>
+                          <p className="mt-1 text-sm leading-7 text-gray-700">{suggestion.evidence}</p>
                         </div>
                       ) : null}
 
@@ -1184,16 +1144,6 @@ export default function ReviewDetailPage() {
         </section>
       ) : null}
 
-      {activeEvidence ? (
-        <div className="fixed bottom-5 right-5 z-40 max-w-sm rounded-2xl border border-primary-200 bg-white p-4 shadow-xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">证据高亮</p>
-          <p className="mt-2 max-h-24 overflow-y-auto text-sm leading-6 text-gray-700">{activeEvidence}</p>
-          <div className="mt-3 flex justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={scrollBackToReport}>返回</Button>
-            <Button size="sm" onClick={() => evidenceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>查看原文</Button>
-          </div>
-        </div>
-      ) : null}
     </div>
   )
 }
