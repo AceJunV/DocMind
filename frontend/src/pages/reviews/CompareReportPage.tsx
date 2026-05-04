@@ -10,8 +10,15 @@ import type { DiffType } from '@/types'
 const FILTER_OPTIONS: { label: string; value: DiffType | 'all' }[] = [
   { label: '全部', value: 'all' },
   { label: '新增', value: 'add' },
+  { label: '修改', value: 'modify' },
   { label: '删除', value: 'delete' },
 ]
+
+const DIFF_BADGE: Record<Exclude<DiffType, 'equal'>, { label: string; variant: 'success' | 'danger' | 'warning'; border: string }> = {
+  add: { label: '新增', variant: 'success', border: 'border-l-emerald-400' },
+  modify: { label: '修改', variant: 'warning', border: 'border-l-amber-400' },
+  delete: { label: '删除', variant: 'danger', border: 'border-l-red-400' },
+}
 
 export default function CompareReportPage() {
   const { reviewId } = useParams<{ reviewId: string }>()
@@ -29,10 +36,11 @@ export default function CompareReportPage() {
   }, [compareData, filter])
 
   const stats = useMemo(() => {
-    if (!compareData) return { additions: 0, deletions: 0, total: 0 }
+    if (!compareData) return { additions: 0, deletions: 0, modifications: 0, total: 0 }
     const additions = compareData.pointReviews.filter((p) => p.diffType === 'add').length
     const deletions = compareData.pointReviews.filter((p) => p.diffType === 'delete').length
-    return { additions, deletions, total: additions + deletions }
+    const modifications = compareData.pointReviews.filter((p) => p.diffType === 'modify').length
+    return { additions, deletions, modifications, total: additions + deletions + modifications }
   }, [compareData])
 
   if (!review || !compareData) {
@@ -68,7 +76,7 @@ export default function CompareReportPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card className="rounded-[20px] text-center">
           <CardContent className="py-4">
             <p className="text-2xl font-bold text-emerald-600">{stats.additions}</p>
@@ -79,6 +87,12 @@ export default function CompareReportPage() {
           <CardContent className="py-4">
             <p className="text-2xl font-bold text-red-500">{stats.deletions}</p>
             <p className="text-xs text-gray-500">删除</p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-[20px] text-center">
+          <CardContent className="py-4">
+            <p className="text-2xl font-bold text-amber-600">{stats.modifications}</p>
+            <p className="text-xs text-gray-500">修改</p>
           </CardContent>
         </Card>
         <Card className="rounded-[20px] text-center">
@@ -120,18 +134,20 @@ export default function CompareReportPage() {
       </div>
 
       <div className="space-y-4">
-        {filteredReviews.map((pr) => (
+        {filteredReviews.map((pr) => {
+          const typeMeta = pr.diffType === 'equal' ? DIFF_BADGE.modify : DIFF_BADGE[pr.diffType]
+          return (
           <Card
             key={pr.pointIndex}
             className={cn(
               'rounded-[20px] border-l-[3px]',
-              pr.diffType === 'add' ? 'border-l-emerald-400' : 'border-l-red-400'
+              typeMeta.border
             )}
           >
             <CardContent className="py-4">
               <div className="mb-3 flex items-center gap-2">
-                <Badge variant={pr.diffType === 'add' ? 'success' : 'danger'}>
-                  {pr.diffType === 'add' ? '新增' : '删除'}
+                <Badge variant={typeMeta.variant}>
+                  {typeMeta.label}
                 </Badge>
                 <span className="text-xs text-gray-400">#{pr.pointIndex + 1}</span>
               </div>
@@ -176,7 +192,8 @@ export default function CompareReportPage() {
               </div>
             </CardContent>
           </Card>
-        ))}
+          )
+        })}
       </div>
 
       {filteredReviews.length === 0 && (

@@ -132,6 +132,7 @@ export interface Review {
   agent_reviews?: AgentReview[]
   summary?: ReviewSummary
   compareReport?: CompareReviewReport
+  tifenReport?: string
   status: 'in_progress' | 'completed'
   created_at: string
   document?: Document
@@ -140,7 +141,7 @@ export interface Review {
 
 export interface DiffPointReview {
   pointIndex: number
-  diffType: string
+  diffType: DiffType
   oldText: string
   newText: string
   isCore: boolean
@@ -351,11 +352,13 @@ export interface RoleEvent {
 export type ProviderMode = 'official' | 'third-party' | 'local'
 
 // 文件对比评审类型
-export type DiffType = 'add' | 'delete' | 'equal'
+export type DiffType = 'add' | 'delete' | 'modify' | 'equal'
 
 export interface DiffPoint {
   type: DiffType
   text: string
+  oldText?: string
+  newText?: string
 }
 
 export interface DiffResult {
@@ -365,6 +368,7 @@ export interface DiffResult {
   stats: {
     additions: number
     deletions: number
+    modifications: number
     equalLines: number
   }
 }

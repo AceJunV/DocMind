@@ -187,7 +187,7 @@ export default function AgentCreatePage() {
     try {
       const result = await continuePrompt(preview.system_prompt, {
         onChunk: () => {},
-        onDone: (text) => setPreview((p) => p ? { ...p, system_prompt: p.system_prompt + '\n\n' + text } : p),
+        onDone: () => {},
         onError: (err) => toast('error', `AI续写失败: ${err.message}`),
       })
       if (result) setPreview((p) => p ? { ...p, system_prompt: p.system_prompt + '\n\n' + result } : p)

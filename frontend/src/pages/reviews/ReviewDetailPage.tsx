@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -19,7 +19,7 @@ import { useReviewStore } from '@/stores/reviewStore'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/Toast'
 import { RadarChart } from '@/components/ui/RadarChart'
-import { TEACHING_DIMENSIONS } from '@/types'
+import { TEACHING_DIMENSIONS, TEACHING_EVAL_DIMENSIONS } from '@/types'
 import type { AgentReview, Suggestion } from '@/types'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -59,6 +59,11 @@ export default function ReviewDetailPage() {
   const navigate = useNavigate()
   const review = useReviewStore((state) => state.reviews.find((item) => item.id === id))
   const toggleSuggestionAdopted = useReviewStore((state) => state.toggleSuggestionAdopted)
+  const reportTopRef = useRef<HTMLDivElement>(null)
+  const evidenceRef = useRef<HTMLDivElement>(null)
+  const [showKeyInsights, setShowKeyInsights] = useState(true)
+  const [showAuxiliaryDimensions, setShowAuxiliaryDimensions] = useState(false)
+  const [activeEvidence, setActiveEvidence] = useState<string | null>(null)
   const agentReviews = useMemo(() => review?.agent_reviews || [], [review?.agent_reviews])
   const completedReviews = useMemo(
     () => agentReviews.filter((item) => item.status !== 'failed'),
@@ -90,6 +95,11 @@ export default function ReviewDetailPage() {
     }),
     [completedReviews, reviewAgents],
   )
+  const chartDimensions = useMemo(() => {
+    const names = completedReviews.flatMap((item) => item.dimensions.map((dimension) => dimension.name))
+    const uniqueNames = [...new Set(names)]
+    return uniqueNames.length > 0 ? uniqueNames : TEACHING_DIMENSIONS
+  }, [completedReviews])
   const radarDatasets = useMemo(
     () =>
       completedReviews.map((item) => {
@@ -97,14 +107,14 @@ export default function ReviewDetailPage() {
         return {
           label: item.agent_name,
           color: item.agent_color,
-          scores: TEACHING_DIMENSIONS.map((dimension) => dimensionMap.get(dimension) || 0),
+          scores: chartDimensions.map((dimension) => dimensionMap.get(dimension) || 0),
         }
       }),
-    [completedReviews],
+    [chartDimensions, completedReviews],
   )
   const avgDimScores = useMemo(
     () =>
-      TEACHING_DIMENSIONS.map((dimension) => {
+      chartDimensions.map((dimension) => {
         const scores = completedReviews.map((item) => item.dimensions.find((entry) => entry.name === dimension)?.score || 0)
 
         if (!scores.length) {
@@ -118,7 +128,50 @@ export default function ReviewDetailPage() {
           max: Math.max(...scores),
         }
       }),
-    [completedReviews],
+    [chartDimensions, completedReviews],
+  )
+  const hasTeachingEvalDimensions = TEACHING_EVAL_DIMENSIONS.every((dimension) => chartDimensions.includes(dimension))
+  const primaryDimensions = useMemo(
+    () => hasTeachingEvalDimensions ? TEACHING_EVAL_DIMENSIONS : chartDimensions,
+    [chartDimensions, hasTeachingEvalDimensions],
+  )
+  const auxiliaryDimensions = useMemo(
+    () => hasTeachingEvalDimensions
+      ? TEACHING_DIMENSIONS.filter((dimension) => chartDimensions.includes(dimension))
+      : [],
+    [chartDimensions, hasTeachingEvalDimensions],
+  )
+  const primaryRadarDatasets = useMemo(
+    () =>
+      completedReviews.map((item) => {
+        const dimensionMap = new Map(item.dimensions.map((dimension) => [dimension.name, dimension.score]))
+        return {
+          label: item.agent_name,
+          color: item.agent_color,
+          scores: primaryDimensions.map((dimension) => dimensionMap.get(dimension) || 0),
+        }
+      }),
+    [completedReviews, primaryDimensions],
+  )
+  const auxiliaryRadarDatasets = useMemo(
+    () =>
+      completedReviews.map((item) => {
+        const dimensionMap = new Map(item.dimensions.map((dimension) => [dimension.name, dimension.score]))
+        return {
+          label: item.agent_name,
+          color: item.agent_color,
+          scores: auxiliaryDimensions.map((dimension) => dimensionMap.get(dimension) || 0),
+        }
+      }),
+    [auxiliaryDimensions, completedReviews],
+  )
+  const primaryAvgScores = useMemo(
+    () => avgDimScores.filter((dimension) => primaryDimensions.includes(dimension.name as (typeof primaryDimensions)[number])),
+    [avgDimScores, primaryDimensions],
+  )
+  const auxiliaryAvgScores = useMemo(
+    () => avgDimScores.filter((dimension) => auxiliaryDimensions.includes(dimension.name as (typeof auxiliaryDimensions)[number])),
+    [auxiliaryDimensions, avgDimScores],
   )
 
   if (!review) {
@@ -170,6 +223,25 @@ export default function ReviewDetailPage() {
   const prioritySuggestions = dedupeSuggestions(summary?.top_suggestions?.length ? summary.top_suggestions : allSuggestions).slice(0, 10)
   const strengths = (summary?.strengths || []).slice(0, 4)
   const painPoints = (summary?.pain_points || []).slice(0, 4)
+  const dimensionLabel = chartDimensions.length === 3 ? '三维评价' : chartDimensions.length === 6 ? '六维度' : `${chartDimensions.length}维度`
+  const tifenReport = review.tifenReport?.trim()
+  const documentText = review.document?.raw_content || ''
+  const normalizedEvidence = activeEvidence?.trim() || ''
+  const evidenceIndex = normalizedEvidence ? documentText.indexOf(normalizedEvidence) : -1
+  const evidenceContext = normalizedEvidence && documentText
+    ? evidenceIndex < 0
+      ? documentText.slice(0, 800)
+      : documentText.slice(Math.max(0, evidenceIndex - 260), Math.min(documentText.length, evidenceIndex + normalizedEvidence.length + 360))
+    : ''
+
+  const scrollToEvidence = (evidence: string) => {
+    setActiveEvidence(evidence)
+    window.setTimeout(() => evidenceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0)
+  }
+
+  const scrollBackToReport = () => {
+    reportTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const buildReportMarkdown = () => {
     const lines = [
@@ -197,7 +269,7 @@ export default function ReviewDetailPage() {
 
     if (completedReviews.length > 0) {
       lines.push(
-        '## 六维度评分概览',
+        `## ${dimensionLabel}评分概览`,
         '',
         '| 维度 | 平均分 | 最低分 | 最高分 |',
         '|------|--------|--------|--------|',
@@ -282,6 +354,131 @@ export default function ReviewDetailPage() {
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
     toast('success', '教研评审报告已下载')
+  }
+
+  const handleExportImage = () => {
+    const canvas = document.createElement('canvas')
+    const width = 1400
+    const height = 1800
+    const padding = 72
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.fillStyle = '#f8fafc'
+    ctx.fillRect(0, 0, width, height)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(36, 36, width - 72, height - 72)
+    ctx.strokeStyle = '#e5e7eb'
+    ctx.strokeRect(36, 36, width - 72, height - 72)
+
+    const wrapText = (text: string, x: number, y: number, maxWidth: number, lineHeight: number) => {
+      const chars = text.split('')
+      let line = ''
+      let nextY = y
+      chars.forEach((char) => {
+        const testLine = line + char
+        if (ctx.measureText(testLine).width > maxWidth && line) {
+          ctx.fillText(line, x, nextY)
+          line = char
+          nextY += lineHeight
+        } else {
+          line = testLine
+        }
+      })
+      if (line) {
+        ctx.fillText(line, x, nextY)
+        nextY += lineHeight
+      }
+      return nextY
+    }
+
+    let y = padding
+    ctx.fillStyle = '#111827'
+    ctx.font = 'bold 38px sans-serif'
+    y = wrapText(`《${docTitle}》教研评审报告`, padding, y, width - padding * 2, 48)
+    ctx.font = '18px sans-serif'
+    ctx.fillStyle = '#4b5563'
+    y = wrapText(`综合评分：${review.overall_score?.toFixed(1) || '-'}    成功角色：${completedReviews.length}    生成失败：${failedReviews.length}`, padding, y + 8, width - padding * 2, 30)
+
+    if (summary?.overview) {
+      ctx.fillStyle = '#111827'
+      ctx.font = 'bold 24px sans-serif'
+      ctx.fillText('总体诊断', padding, y + 32)
+      ctx.font = '18px sans-serif'
+      ctx.fillStyle = '#374151'
+      y = wrapText(summary.overview, padding, y + 64, width - padding * 2, 30)
+    }
+
+    const radarCenterX = padding + 220
+    const radarCenterY = y + 190
+    const radius = 130
+    if (avgDimScores.length > 0) {
+      ctx.strokeStyle = '#d1d5db'
+      ctx.fillStyle = '#4b5563'
+      ctx.font = '15px sans-serif'
+      avgDimScores.forEach((item, index) => {
+        const angle = (Math.PI * 2 * index) / avgDimScores.length - Math.PI / 2
+        const x = radarCenterX + Math.cos(angle) * radius
+        const pointY = radarCenterY + Math.sin(angle) * radius
+        ctx.beginPath()
+        ctx.moveTo(radarCenterX, radarCenterY)
+        ctx.lineTo(x, pointY)
+        ctx.stroke()
+        ctx.fillText(item.name, x - 24, pointY + (pointY > radarCenterY ? 24 : -12))
+      })
+      ctx.beginPath()
+      avgDimScores.forEach((item, index) => {
+        const angle = (Math.PI * 2 * index) / avgDimScores.length - Math.PI / 2
+        const scoreRadius = radius * (item.avg / 5)
+        const x = radarCenterX + Math.cos(angle) * scoreRadius
+        const pointY = radarCenterY + Math.sin(angle) * scoreRadius
+        if (index === 0) ctx.moveTo(x, pointY)
+        else ctx.lineTo(x, pointY)
+      })
+      ctx.closePath()
+      ctx.fillStyle = 'rgba(99, 102, 241, 0.24)'
+      ctx.fill()
+      ctx.strokeStyle = '#6366f1'
+      ctx.stroke()
+
+      ctx.fillStyle = '#111827'
+      ctx.font = 'bold 24px sans-serif'
+      ctx.fillText(`${dimensionLabel}雷达图`, padding, y + 24)
+      ctx.font = '18px sans-serif'
+      ctx.fillStyle = '#374151'
+      avgDimScores.forEach((item, index) => {
+        ctx.fillText(`${item.name}：${item.avg.toFixed(1)}/5`, padding + 520, y + 80 + index * 30)
+      })
+      y += 360
+    }
+
+    ctx.fillStyle = '#111827'
+    ctx.font = 'bold 24px sans-serif'
+    ctx.fillText('核心问题', padding, y)
+    ctx.font = '18px sans-serif'
+    ctx.fillStyle = '#374151'
+    y += 34
+    ;(painPoints.length ? painPoints.slice(0, 3) : ['暂无明确痛点汇总']).forEach((item, index) => {
+      y = wrapText(`${index + 1}. ${item}`, padding, y, width - padding * 2, 30)
+    })
+
+    ctx.fillStyle = '#111827'
+    ctx.font = 'bold 24px sans-serif'
+    ctx.fillText('优先建议', padding, y + 28)
+    ctx.font = '18px sans-serif'
+    ctx.fillStyle = '#374151'
+    y += 64
+    prioritySuggestions.slice(0, 5).forEach((suggestion, index) => {
+      y = wrapText(`${index + 1}. ${suggestion.title || '建议'}：${suggestion.content}`, padding, y, width - padding * 2, 30)
+    })
+
+    const link = document.createElement('a')
+    link.download = `教研评审报告_${docTitle}.png`
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+    toast('success', '教研评审报告图片已下载')
   }
 
   const handleCopy = async () => {
@@ -371,6 +568,14 @@ export default function ReviewDetailPage() {
                           />
                         </div>
                         {dimension.comment ? <p className="text-xs leading-6 text-gray-600">{dimension.comment}</p> : null}
+                        {dimension.evidence ? (
+                          <button
+                            onClick={() => scrollToEvidence(dimension.evidence || '')}
+                            className="mt-3 w-full rounded-xl border border-primary-100 bg-white px-3 py-2 text-left text-xs leading-5 text-primary-700 transition-colors hover:bg-primary-50"
+                          >
+                            证据：{dimension.evidence}
+                          </button>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -384,7 +589,7 @@ export default function ReviewDetailPage() {
   }
 
   return (
-    <div className="space-y-6 animate-slide-up">
+    <div ref={reportTopRef} className="space-y-6 animate-slide-up">
       <Link to="/reviews" className="flex items-center gap-1 text-sm text-gray-500 no-underline hover:text-gray-700">
         <ArrowLeft className="h-4 w-4" /> 返回评审大厅
       </Link>
@@ -414,6 +619,10 @@ export default function ReviewDetailPage() {
                 <Download className="h-4 w-4" />
                 下载 Markdown
               </Button>
+              <Button variant="secondary" onClick={handleExportImage}>
+                <Download className="h-4 w-4" />
+                导出图片
+              </Button>
               <Button variant="secondary" onClick={handleCopy}>
                 <Copy className="h-4 w-4" />
                 复制
@@ -435,6 +644,56 @@ export default function ReviewDetailPage() {
           ) : null}
         </div>
       </section>
+
+      <section className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm dm-stage-reveal" style={{ ['--reveal-delay' as string]: '40ms' }}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">Key Insights</p>
+            <h2 className="mt-1 text-lg font-semibold text-gray-900">核心提炼</h2>
+          </div>
+          <Button variant="secondary" size="sm" onClick={() => setShowKeyInsights((previous) => !previous)}>
+            {showKeyInsights ? '收起' : '展开'}
+          </Button>
+        </div>
+        {showKeyInsights ? (
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+              <p className="mb-3 text-sm font-semibold text-amber-700">3 个核心问题</p>
+              <div className="space-y-2">
+                {(painPoints.length ? painPoints.slice(0, 3) : ['暂无明确痛点汇总']).map((item, index) => (
+                  <p key={item} className="text-sm leading-7 text-gray-700">{index + 1}. {item}</p>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+              <p className="mb-3 text-sm font-semibold text-emerald-700">2-3 个保留亮点</p>
+              <div className="space-y-2">
+                {(strengths.length ? strengths.slice(0, 3) : ['暂无明确亮点汇总']).map((item, index) => (
+                  <p key={item} className="text-sm leading-7 text-gray-700">{index + 1}. {item}</p>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      {activeEvidence ? (
+        <section ref={evidenceRef} className="rounded-[28px] border border-primary-200 bg-primary-50/70 p-5 shadow-sm dm-stage-reveal" style={{ ['--reveal-delay' as string]: '80ms' }}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">Evidence Locator</p>
+              <h2 className="mt-1 text-lg font-semibold text-gray-900">原文证据定位</h2>
+            </div>
+            <Button variant="secondary" size="sm" onClick={scrollBackToReport}>返回报告</Button>
+          </div>
+          <div className="rounded-2xl bg-white p-4">
+            <p className="mb-3 text-sm font-medium text-primary-700">当前证据：{activeEvidence}</p>
+            <p className="max-h-64 overflow-y-auto whitespace-pre-wrap text-sm leading-7 text-gray-700">
+              {evidenceContext || '当前文档没有可定位的原文内容。'}
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       {failedReviews.length > 0 ? (
         <section className="rounded-[28px] border border-red-200 bg-red-50/70 p-5 dm-stage-reveal" style={{ ['--reveal-delay' as string]: '80ms' }}>
@@ -476,7 +735,7 @@ export default function ReviewDetailPage() {
               </div>
 
               <div className="rounded-[24px] border border-gray-100 bg-gray-50/80 p-4">
-                <p className="mb-3 text-sm font-semibold text-gray-700">六维度均值</p>
+                <p className="mb-3 text-sm font-semibold text-gray-700">{dimensionLabel}均值</p>
                 <div className="space-y-2">
                   {avgDimScores.map((item) => (
                     <div key={item.name} className="flex items-center gap-2 text-xs">
@@ -508,14 +767,109 @@ export default function ReviewDetailPage() {
         </Card>
 
         {radarDatasets.length > 0 ? (
-          <Card className="rounded-[28px]">
-            <CardContent className="flex flex-col items-center justify-center p-6">
-              <p className="mb-3 text-sm font-semibold text-gray-700">六维度雷达图对比</p>
-              <RadarChart datasets={radarDatasets} size={300} />
+          <Card className={cn('rounded-[28px]', hasTeachingEvalDimensions && 'border-primary-200 bg-primary-50/30')}>
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">Primary Evaluation</p>
+                  <h2 className="mt-1 text-lg font-semibold text-gray-900">
+                    {hasTeachingEvalDimensions ? '三维评价' : `${dimensionLabel}评价`}
+                  </h2>
+                  <p className="mt-1 text-xs leading-6 text-gray-500">
+                    {hasTeachingEvalDimensions
+                      ? '知识掌握、原理理解、迁移应用作为一级核心评分，优先呈现。'
+                      : '当前报告使用旧维度体系，先按已有评分维度展示。'}
+                  </p>
+                </div>
+                {hasTeachingEvalDimensions ? <Badge variant="primary">一级主评分</Badge> : null}
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-5 p-6 xl:grid-cols-[1fr_0.95fr]">
+              <div className="flex justify-center">
+                <RadarChart datasets={primaryRadarDatasets} dimensions={primaryDimensions} size={320} />
+              </div>
+              <div className="space-y-3">
+                {primaryAvgScores.map((item) => (
+                  <div key={item.name} className="rounded-2xl border border-primary-100 bg-white px-4 py-3">
+                    <div className="mb-2 flex items-center justify-between text-sm">
+                      <span className="font-semibold text-gray-800">{item.name}</span>
+                      <span className="font-bold text-primary-700">{item.avg.toFixed(1)}/5</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-primary-50">
+                      <div className="h-full rounded-full bg-primary-500" style={{ width: `${item.avg * 20}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
         ) : null}
       </section>
+
+      {hasTeachingEvalDimensions ? (
+        <section className="dm-stage-reveal" style={{ ['--reveal-delay' as string]: '150ms' }}>
+          <Card className="rounded-[28px] border-gray-200">
+            <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500">Auxiliary Evaluation</p>
+                <h2 className="mt-1 text-base font-semibold text-gray-900">六维辅助评价</h2>
+                <p className="mt-1 text-xs leading-6 text-gray-500">课程设计、知识链等 6 维作为二级辅助维度，默认折叠。</p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => setShowAuxiliaryDimensions((previous) => !previous)}>
+                {showAuxiliaryDimensions ? '收起六维' : '展开六维'}
+              </Button>
+            </CardHeader>
+            {showAuxiliaryDimensions ? (
+              <CardContent className="grid gap-5 p-6 xl:grid-cols-[1fr_0.95fr]">
+                {auxiliaryDimensions.length > 0 ? (
+                  <>
+                    <div className="flex justify-center">
+                      <RadarChart datasets={auxiliaryRadarDatasets} dimensions={auxiliaryDimensions} size={280} />
+                    </div>
+                    <div className="space-y-2">
+                      {auxiliaryAvgScores.map((item) => (
+                        <div key={item.name} className="flex items-center gap-2 text-xs">
+                          <span className="w-16 shrink-0 text-right text-gray-500">{item.name}</span>
+                          <div className="h-2 flex-1 rounded-full bg-gray-100">
+                            <div className="h-full rounded-full bg-gray-500" style={{ width: `${item.avg * 20}%` }} />
+                          </div>
+                          <span className="w-6 text-right font-medium text-gray-600">{item.avg.toFixed(1)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500 xl:col-span-2">
+                    当前报告没有生成六维辅助评分数据。
+                  </div>
+                )}
+              </CardContent>
+            ) : null}
+          </Card>
+        </section>
+      ) : null}
+
+      {tifenReport ? (
+        <section className="dm-stage-reveal" style={{ ['--reveal-delay' as string]: '165ms' }}>
+          <Card className="rounded-[28px] border-primary-200 bg-primary-50/40">
+            <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">AI Suggestion Report</p>
+                <h2 className="mt-1 text-base font-semibold text-gray-900">提分思路</h2>
+                <p className="mt-1 text-xs leading-6 text-gray-500">聚焦提分、升学、竞赛和密考场景的可执行建议报告。</p>
+              </div>
+              <Badge variant="primary">AI建议报告</Badge>
+            </CardHeader>
+            <CardContent className="space-y-3 p-5">
+              {tifenReport.split('\n').filter(Boolean).map((line, index) => (
+                <div key={`${index}-${line}`} className="rounded-2xl border border-white/60 bg-white/90 px-4 py-3 text-sm leading-7 text-gray-700">
+                  {line.replace(/^#{1,3}\s*/, '')}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </section>
+      ) : null}
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-3 dm-stage-reveal" style={{ ['--reveal-delay' as string]: '180ms' }}>
         <Card className="rounded-[28px] border-emerald-200 bg-emerald-50/50">
@@ -616,7 +970,12 @@ export default function ReviewDetailPage() {
                       {suggestion.evidence ? (
                         <div className="mt-3 rounded-2xl bg-gray-50 p-3">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500">证据</p>
-                          <p className="mt-1 text-sm leading-7 text-gray-600">{suggestion.evidence}</p>
+                          <button
+                            onClick={() => scrollToEvidence(suggestion.evidence || '')}
+                            className="mt-1 w-full rounded-xl border border-transparent px-0 py-1 text-left text-sm leading-7 text-primary-700 transition-colors hover:border-primary-100 hover:bg-white hover:px-3"
+                          >
+                            {suggestion.evidence}
+                          </button>
                         </div>
                       ) : null}
 
@@ -656,6 +1015,17 @@ export default function ReviewDetailPage() {
           {renderAgentCards(studentReviews, '学生视角', '🧑‍🎓')}
           {renderAgentCards(parentReviews, '家长视角', '👨‍👩‍👧')}
         </section>
+      ) : null}
+
+      {activeEvidence ? (
+        <div className="fixed bottom-5 right-5 z-40 max-w-sm rounded-2xl border border-primary-200 bg-white p-4 shadow-xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">证据高亮</p>
+          <p className="mt-2 max-h-24 overflow-y-auto text-sm leading-6 text-gray-700">{activeEvidence}</p>
+          <div className="mt-3 flex justify-end gap-2">
+            <Button variant="secondary" size="sm" onClick={scrollBackToReport}>返回</Button>
+            <Button size="sm" onClick={() => evidenceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>查看原文</Button>
+          </div>
+        </div>
       ) : null}
     </div>
   )

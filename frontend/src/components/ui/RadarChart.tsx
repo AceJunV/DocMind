@@ -10,11 +10,11 @@ interface RadarDataset {
 
 interface RadarChartProps {
   datasets: RadarDataset[]
+  dimensions?: string[]
   size?: number
 }
 
-export function RadarChart({ datasets, size = 280 }: RadarChartProps) {
-  const dimensions = TEACHING_DIMENSIONS
+export function RadarChart({ datasets, dimensions = TEACHING_DIMENSIONS, size = 280 }: RadarChartProps) {
   const n = dimensions.length
   const cx = size / 2
   const cy = size / 2

@@ -18,10 +18,16 @@ import { AGENT_COLORS, useAgentStore } from '@/stores/agentStore'
 import { useReviewStore } from '@/stores/reviewStore'
 import { useAuthStore } from '@/stores/authStore'
 import { isModelConfigValid, useSettingsStore } from '@/stores/settingsStore'
-import { createFailedAgentReview, executeAgentReview, generateSummary } from '@/services/reviewEngine'
+import {
+  createFailedAgentReview,
+  executeCompareReview,
+  executeTeachingEvalReview,
+  generateTifenReport,
+  generateSummary,
+} from '@/services/reviewEngine'
 import { toast } from '@/components/ui/Toast'
 import { createId } from '@/utils/id'
-import type { Agent, AgentReview, DiffResult, Review, ReviewMode, TeachingDimension } from '@/types'
+import type { Agent, AgentReview, CompareReviewReport, DiffPointReview, DiffResult, Review, ReviewMode, TeachingDimension } from '@/types'
 import { computeDiff } from '@/services/compareService'
 import { DiffViewer } from '@/components/reviews/DiffViewer'
 import { Button } from '@/components/ui/Button'
@@ -375,6 +381,62 @@ function getAgentWorkingStatus(agent: Agent, item: ReviewProgressItem) {
   return getAgentActivityCopy(agent).status
 }
 
+function createFailedCompareReport(diffResult: DiffResult, agentName: string, errorMessage: string): CompareReviewReport {
+  const pointReviews: DiffPointReview[] = diffResult.points
+    .filter((point) => point.type !== 'equal')
+    .map((point, index) => ({
+      pointIndex: index,
+      diffType: point.type,
+      oldText: point.type === 'delete' ? point.text : point.type === 'modify' ? point.oldText || '' : '',
+      newText: point.type === 'add' ? point.text : point.type === 'modify' ? point.newText || point.text : '',
+      isCore: false,
+      isNecessary: true,
+      alignsWithKnowledge: true,
+      comment: `${agentName}: 评审失败，${errorMessage}`,
+    }))
+
+  return {
+    pointReviews,
+    overview: `${agentName} 的对比评审生成失败。`,
+    overallAssessment: errorMessage,
+  }
+}
+
+function mergeCompareReports(reports: { agent: Agent; report: CompareReviewReport }[]): CompareReviewReport {
+  if (reports.length === 0) {
+    return { pointReviews: [], overview: '暂无有效对比评审结果。', overallAssessment: '暂无有效对比评审结果。' }
+  }
+
+  const pointMap = new Map<number, DiffPointReview[]>()
+  for (const { report } of reports) {
+    for (const pointReview of report.pointReviews) {
+      pointMap.set(pointReview.pointIndex, [...(pointMap.get(pointReview.pointIndex) || []), pointReview])
+    }
+  }
+
+  const pointReviews = [...pointMap.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([pointIndex, reviews]) => {
+      const first = reviews[0]
+      return {
+        pointIndex,
+        diffType: first.diffType,
+        oldText: first.oldText,
+        newText: first.newText,
+        isCore: reviews.some((review) => review.isCore),
+        isNecessary: reviews.some((review) => review.isNecessary),
+        alignsWithKnowledge: reviews.some((review) => review.alignsWithKnowledge),
+        comment: reviews.map((review) => review.comment).join('\n\n'),
+      }
+    })
+
+  return {
+    pointReviews,
+    overview: reports.map(({ agent, report }) => `${agent.name}: ${report.overview}`).join('\n'),
+    overallAssessment: reports.map(({ agent, report }) => `${agent.name}: ${report.overallAssessment}`).join('\n\n'),
+  }
+}
+
 function buildAgentTaskCopy(agent: Agent, item: ReviewProgressItem) {
   if (item.status === 'pending') {
     return `${agent.name}正拿起资料，等轮到自己发言。`
@@ -490,6 +552,15 @@ export default function ReviewCreatePage() {
     })
   }
 
+  const selectAllAgents = () => {
+    const nextIds = agents.slice(0, 5).map((agent) => agent.id)
+    setSelectedAgentIds(nextIds)
+    if (agents.length > 5) {
+      toast('info', '最多选择 5 个角色，已选择前 5 个')
+    }
+  }
+
+  const oldCompareDoc = documents.find((d) => d.id === oldDocId)
   const compareDoc = documents.find((d) => d.id === newDocId)
   const canStart = reviewMode === 'compare'
     ? Boolean(oldDocId && newDocId && diffResult && selectedAgentIds.length > 0 && hasValidConfig && compareDoc)
@@ -525,6 +596,57 @@ export default function ReviewCreatePage() {
     }
     setProgress(initialProgress)
 
+    if (reviewMode === 'compare' && diffResult) {
+      const compareReports: { agent: Agent; report: CompareReviewReport }[] = []
+
+      await Promise.all(selectedAgents.map(async (agent) => {
+        setProgress((previous) => ({
+          ...previous,
+          [agent.id]: { status: 'reviewing', text: '', dimensionsCompleted: 1 },
+        }))
+
+        try {
+          const report = await executeCompareReview(
+            agent,
+            diffResult,
+            (text) =>
+              setProgress((previous) => ({
+                ...previous,
+                [agent.id]: {
+                  status: 'reviewing',
+                  text,
+                  dimensionsCompleted: Math.max(previous[agent.id]?.dimensionsCompleted ?? 1, 3),
+                },
+              })),
+            abortRef.current!.signal,
+          )
+
+          compareReports.push({ agent, report })
+          incrementUsage(agent.id)
+          setProgress((previous) => ({
+            ...previous,
+            [agent.id]: { status: 'done', text: previous[agent.id]?.text || '', dimensionsCompleted: 6 },
+          }))
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : '对比评审失败'
+          compareReports.push({ agent, report: createFailedCompareReport(diffResult, agent.name, errorMessage) })
+          setProgress((previous) => ({
+            ...previous,
+            [agent.id]: { status: 'error', text: errorMessage, dimensionsCompleted: previous[agent.id]?.dimensionsCompleted ?? 0 },
+          }))
+        }
+      }))
+
+      updateReview(review.id, {
+        status: 'completed',
+        compareReport: mergeCompareReports(compareReports),
+      })
+      incrementReviewCount(activeDocId)
+      setPhase('done')
+      toast('success', `对比评审完成，已生成 ${compareReports.length} 份逐条评审`)
+      return
+    }
+
     const maxConcurrent = config.maxConcurrentReviews ?? 1
     const results: (AgentReview | null)[] = new Array(selectedAgents.length).fill(null)
 
@@ -547,7 +669,7 @@ export default function ReviewCreatePage() {
       }, 3600)
 
       try {
-        const result = await executeAgentReview(
+        const result = await executeTeachingEvalReview(
           agent,
           activeDoc,
           (text) =>
@@ -604,11 +726,21 @@ export default function ReviewCreatePage() {
       summary = undefined
     }
 
+    let tifenReport
+    try {
+      if (successfulResults.length > 0) {
+        tifenReport = await generateTifenReport(activeDoc, successfulResults)
+      }
+    } catch {
+      tifenReport = undefined
+    }
+
     updateReview(review.id, {
       status: 'completed',
       overall_score: overallScore,
       agent_reviews: finalResults,
       summary,
+      tifenReport,
     })
     incrementReviewCount(activeDocId)
     setPhase('done')
@@ -645,7 +777,7 @@ export default function ReviewCreatePage() {
             </span>
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-gray-900">评审已结束</h1>
             <p className="mt-2 text-sm leading-7 text-gray-600">
-              《{selectedDoc?.title || '当前文档'}》共选择了 {selectedAgents.length} 位角色，成功 {successCount} 位，失败 {failedCount} 位。
+              《{(reviewMode === 'compare' ? compareDoc : selectedDoc)?.title || '当前文档'}》共选择了 {selectedAgents.length} 位角色，成功 {successCount} 位，失败 {failedCount} 位。
             </p>
           </div>
         </div>
@@ -656,13 +788,34 @@ export default function ReviewCreatePage() {
           <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-gray-600">
             强化后的报告会先给出总体诊断和关键痛点，再下钻到聚合建议与分角色细评，便于你继续进入教研研讨。
           </p>
-          <Link to={`/reviews/${reviewId}`} className="mt-6 inline-flex no-underline">
+          <Link to={reviewMode === 'compare' ? `/reviews/compare/${reviewId}` : `/reviews/${reviewId}`} className="mt-6 inline-flex no-underline">
             <Button size="lg">
               <ClipboardCheck className="h-4 w-4" />
               查看评审报告
             </Button>
           </Link>
         </div>
+
+        {failedCount > 0 ? (
+          <div className="rounded-[24px] border border-red-200 bg-red-50 px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-red-800">有角色生成失败</p>
+                <p className="mt-1 text-xs leading-6 text-red-700">错误信息已保留在报告中。可以检查 API 额度、网络或模型返回格式后重新发起评审。</p>
+              </div>
+              <Button
+                variant="danger-outline"
+                onClick={() => {
+                  setPhase('config')
+                  setProgress({})
+                  setReviewId('')
+                }}
+              >
+                重试
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -952,6 +1105,22 @@ export default function ReviewCreatePage() {
                 </div>
               </div>
             </div>
+            {(oldCompareDoc || compareDoc) && (
+              <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-orange-100 bg-orange-50/50 p-4">
+                  <p className="mb-2 text-xs font-semibold text-orange-700">修改前内容预览</p>
+                  <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-xs leading-6 text-gray-700">
+                    {(oldCompareDoc?.raw_content || '请选择修改前文档').slice(0, 900)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+                  <p className="mb-2 text-xs font-semibold text-emerald-700">修改后内容预览</p>
+                  <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-xs leading-6 text-gray-700">
+                    {(compareDoc?.raw_content || '请选择修改后文档').slice(0, 900)}
+                  </p>
+                </div>
+              </div>
+            )}
             {oldDocId && newDocId && (
               <div className="mt-4">
                 <Button
@@ -987,54 +1156,88 @@ export default function ReviewCreatePage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {reviewMode === 'single' && (
-        <Card className="rounded-[28px]">
-          <CardHeader>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">Step 1</p>
-              <h2 className="mt-2 text-lg font-semibold text-gray-900">选择文档</h2>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {documents.length === 0 ? (
-              <div className="py-8 text-center">
-                <FileText className="mx-auto mb-2 h-10 w-10 text-gray-300" />
-                <p className="text-sm text-gray-500">还没有可评审的文档</p>
-                <Link to="/documents" className="mt-2 inline-block text-xs font-medium text-primary-600 no-underline hover:underline">
-                  去上传文档
-                </Link>
-              </div>
-            ) : (
-              <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-                {documents.map((document) => (
-                  <button
-                    key={document.id}
-                    onClick={() => setSelectedDocId(document.id)}
-                    className={cn(
-                      'flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-colors',
-                      selectedDocId === document.id
-                        ? 'border-primary-500 bg-primary-50'
-                        : 'border-gray-200 bg-white hover:bg-gray-50'
-                    )}
-                  >
-                    <div className={cn(
-                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl',
-                      selectedDocId === document.id ? 'bg-white text-primary-600' : 'bg-gray-50 text-gray-400'
-                    )}>
-                      <FileText className="h-5 w-5" />
+          <div className="space-y-6 lg:col-span-2">
+            <Card className="rounded-[28px]">
+              <CardHeader>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">Step 1</p>
+                  <h2 className="mt-2 text-lg font-semibold text-gray-900">选择文档</h2>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {documents.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <FileText className="mx-auto mb-2 h-10 w-10 text-gray-300" />
+                    <p className="text-sm text-gray-500">还没有可评审的文档</p>
+                    <Link to="/documents" className="mt-2 inline-block text-xs font-medium text-primary-600 no-underline hover:underline">
+                      去上传文档
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                    <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
+                      {documents.map((document) => (
+                        <button
+                          key={document.id}
+                          onClick={() => setSelectedDocId(document.id)}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-colors',
+                            selectedDocId === document.id
+                              ? 'border-primary-500 bg-primary-50'
+                              : 'border-gray-200 bg-white hover:bg-gray-50'
+                          )}
+                        >
+                          <div className={cn(
+                            'flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl',
+                            selectedDocId === document.id ? 'bg-white text-primary-600' : 'bg-gray-50 text-gray-400'
+                          )}>
+                            <FileText className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-gray-900">{document.title}</p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              {document.word_count?.toLocaleString() || 0} 字 · {document.file_type.toUpperCase()}
+                            </p>
+                          </div>
+                          {selectedDocId === document.id ? <Check className="h-4 w-4 shrink-0 text-primary-600" /> : null}
+                        </button>
+                      ))}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-900">{document.title}</p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        {document.word_count?.toLocaleString() || 0} 字 · {document.file_type.toUpperCase()}
-                      </p>
+
+                    <div className="rounded-[24px] border border-primary-100 bg-primary-50/50 p-5">
+                      {selectedDoc ? (
+                        <div className="flex h-full flex-col gap-4">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">案例详情</p>
+                            <h3 className="mt-2 text-xl font-semibold text-gray-900">{selectedDoc.title}</h3>
+                            <p className="mt-2 text-xs text-gray-500">
+                              {selectedDoc.word_count?.toLocaleString() || 0} 字 · {selectedDoc.file_type.toUpperCase()} · 已上传文档
+                            </p>
+                          </div>
+                          {selectedDoc.summary ? (
+                            <p className="rounded-2xl bg-white/80 p-3 text-sm leading-7 text-gray-700">{selectedDoc.summary}</p>
+                          ) : null}
+                          <div className="min-h-32 flex-1 rounded-2xl bg-white/80 p-3">
+                            <p className="max-h-52 overflow-y-auto whitespace-pre-wrap text-sm leading-7 text-gray-700">
+                              {(selectedDoc.raw_content || '暂无可预览内容').slice(0, 1200)}
+                            </p>
+                          </div>
+                          <Button onClick={handleStart} disabled={!canStart} size="lg" className="w-full justify-center py-6 text-base">
+                            <Play className="h-5 w-5" />
+                            开始评审
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex h-full min-h-72 items-center justify-center text-center text-sm text-gray-500">
+                          选择一个文档后查看案例详情
+                        </div>
+                      )}
                     </div>
-                    {selectedDocId === document.id ? <Check className="h-4 w-4 shrink-0 text-primary-600" /> : null}
-                  </button>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         <Card className="rounded-[28px]">
@@ -1044,15 +1247,34 @@ export default function ReviewCreatePage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">Step 2</p>
                 <h2 className="mt-2 text-lg font-semibold text-gray-900">选择评审角色</h2>
               </div>
-              <Badge variant="default">{selectedAgentIds.length}/5</Badge>
+              <div className="flex items-center gap-2">
+                {agents.length > 0 && (
+                  <button
+                    onClick={selectedAgentIds.length > 0 ? () => setSelectedAgentIds([]) : selectAllAgents}
+                    className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                  >
+                    {selectedAgentIds.length > 0 ? '清空' : '全选'}
+                  </button>
+                )}
+                <Badge variant="default">{selectedAgentIds.length}/5</Badge>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
             {agents.length === 0 ? (
-              <div className="py-8 text-center">
-                <p className="text-sm text-gray-500">还没有角色</p>
-                <Link to="/agents" className="mt-2 inline-block text-xs font-medium text-primary-600 no-underline hover:underline">
-                  去创建或添加角色
+              <div className="rounded-[24px] border border-dashed border-primary-200 bg-primary-50/60 px-5 py-10 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-primary-600 shadow-sm">
+                  <Sparkles className="h-6 w-6" />
+                </div>
+                <p className="text-base font-semibold text-gray-900">先创建你的第一个评审角色</p>
+                <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-gray-600">
+                  角色会以教研老师、学生或家长视角参与评审。创建完成后回到这里即可一键选择。
+                </p>
+                <Link to="/agents/create" className="mt-4 inline-flex no-underline">
+                  <Button>
+                    <Sparkles className="h-4 w-4" />
+                    创建角色
+                  </Button>
                 </Link>
               </div>
             ) : (
@@ -1096,7 +1318,7 @@ export default function ReviewCreatePage() {
           {reviewMode === 'compare' ? (
             diffResult ? (
               <span>
-                对比差异：<span className="font-medium text-emerald-600">+{diffResult.stats.additions}</span> 新增 / <span className="font-medium text-red-500">-{diffResult.stats.deletions}</span> 删除，
+                对比差异：<span className="font-medium text-emerald-600">+{diffResult.stats.additions}</span> 新增 / <span className="font-medium text-amber-600">{diffResult.stats.modifications}</span> 修改 / <span className="font-medium text-red-500">-{diffResult.stats.deletions}</span> 删除，
                 <span className="font-medium text-gray-700"> {selectedAgents.length}</span> 位角色参与评审
               </span>
             ) : (

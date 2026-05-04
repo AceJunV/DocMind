@@ -11,9 +11,25 @@ export function computeDiff(
   const points: DiffPoint[] = []
   let additions = 0
   let deletions = 0
+  let modifications = 0
   let equalLines = 0
 
-  for (const change of changes) {
+  for (let i = 0; i < changes.length; i += 1) {
+    const change = changes[i]
+    const next = changes[i + 1]
+
+    if (change.removed && next?.added) {
+      points.push({
+        type: 'modify',
+        text: next.value,
+        oldText: change.value,
+        newText: next.value,
+      })
+      modifications++
+      i += 1
+      continue
+    }
+
     if (change.added) {
       points.push({ type: 'add', text: change.value })
       additions++
@@ -30,6 +46,6 @@ export function computeDiff(
     oldFileName,
     newFileName,
     points,
-    stats: { additions, deletions, equalLines },
+    stats: { additions, deletions, modifications, equalLines },
   }
 }

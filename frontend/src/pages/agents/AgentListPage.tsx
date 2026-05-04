@@ -1331,6 +1331,24 @@ export default function AgentListPage() {
         )}
       </div>
 
+      {agents.length === 0 && activeTab === 'recommend' ? (
+        <div className="rounded-2xl border border-primary-100 bg-primary-50 px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-primary-800">创建你的第一个角色</p>
+              <p className="mt-1 text-xs leading-6 text-primary-700">可以从推荐模板开始，也可以直接创建自定义教研角色。</p>
+            </div>
+            <button
+              onClick={() => { setAddModalTab('custom'); setPresetModalTpl(null); setShowAddModal(true) }}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 cursor-pointer border-0"
+            >
+              <Plus className="h-4 w-4" />
+              创建角色
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {/* ====== Recommend Tab ====== */}
       {activeTab === 'recommend' && (
         <div className="space-y-6">

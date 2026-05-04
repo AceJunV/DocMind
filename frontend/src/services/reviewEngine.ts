@@ -1,7 +1,8 @@
-import type { Agent, AgentColor, CompareReviewReport, DiffPoint, DiffPointReview, DiffResult, Document, AgentReview, Suggestion, ReviewSummary, TeachingEvalDimension } from '@/types'
+import type { Agent, AgentColor, CompareReviewReport, DiffPointReview, DiffResult, Document, AgentReview, Suggestion, ReviewSummary, TeachingEvalDimension } from '@/types'
 import { TEACHING_DIMENSIONS, TEACHING_EVAL_DIMENSIONS } from '@/types'
 import { chatCompletion } from './llmService'
 import { createId } from '@/utils/id'
+import { buildFallbackTifenReport, buildTifenReportMessages } from './teachingPrompts'
 
 const MAX_DOC_CONTENT = 14000
 const MIN_TOP_SUGGESTIONS = 3
@@ -505,6 +506,33 @@ ${truncatedContent}`,
   }
 }
 
+export async function generateTifenReport(
+  doc: Document,
+  agentReviews: AgentReview[],
+  onProgress?: (text: string) => void,
+  signal?: AbortSignal,
+) {
+  let fullText = ''
+
+  await chatCompletion(
+    buildTifenReportMessages(doc, agentReviews),
+    {
+      onChunk: (chunk) => {
+        fullText += chunk
+        onProgress?.(fullText)
+      },
+      onDone: (text) => {
+        fullText = text || fullText
+        onProgress?.(fullText)
+      },
+      onError: () => {},
+    },
+    signal,
+  )
+
+  return fullText.trim() || buildFallbackTifenReport(doc, agentReviews)
+}
+
 function collectSuggestions(agentReviews: AgentReview[]) {
   const ranked = agentReviews
     .flatMap((review) => review.suggestions)
@@ -706,6 +734,7 @@ const COMPARE_REVIEW_SYSTEM_PROMPT = (agent: Agent) => `${agent.system_prompt}
 1. 是否为核心修改（isCore）：该修改是否触及教学核心内容
 2. 是否为必要修改（isNecessary）：该修改是否必要、合理
 3. 是否贴合知识点（alignsWithKnowledge）：修改是否有助于知识传递
+4. 类型可能是新增、删除或修改；修改类必须同时比较修改前和修改后。
 
 评审要求：
 - 每个 diff 点都要有独立评审意见（comment），说明修改的合理性
@@ -731,7 +760,10 @@ function buildDiffContext(diffResult: DiffResult): string {
   return diffResult.points
     .filter((p) => p.type !== 'equal')
     .map((p, i) => {
-      const label = p.type === 'add' ? '[新增]' : '[删除]'
+      const label = p.type === 'add' ? '[新增]' : p.type === 'delete' ? '[删除]' : '[修改]'
+      if (p.type === 'modify') {
+        return `### Diff ${i}\n类型: ${label}\n修改前:\n${(p.oldText || '').trim()}\n修改后:\n${(p.newText || p.text).trim()}`
+      }
       return `### Diff ${i}\n类型: ${label}\n内容:\n${p.text.trim()}`
     })
     .join('\n\n')
@@ -754,7 +786,7 @@ export async function executeCompareReview(
 
 【修改前文件】${diffResult.oldFileName}
 【修改后文件】${diffResult.newFileName}
-【变更统计】新增 ${diffResult.stats.additions} 处、删除 ${diffResult.stats.deletions} 处
+【变更统计】新增 ${diffResult.stats.additions} 处、修改 ${diffResult.stats.modifications} 处、删除 ${diffResult.stats.deletions} 处
 
 【Diff 详情】
 ${diffContext}`,
@@ -772,8 +804,8 @@ ${diffContext}`,
       .map((p, i) => ({
         pointIndex: i,
         diffType: p.type,
-        oldText: p.type === 'delete' ? p.text : '',
-        newText: p.type === 'add' ? p.text : '',
+        oldText: p.type === 'delete' ? p.text : p.type === 'modify' ? p.oldText || '' : '',
+        newText: p.type === 'add' ? p.text : p.type === 'modify' ? p.newText || p.text : '',
         isCore: false,
         isNecessary: true,
         alignsWithKnowledge: true,
@@ -794,8 +826,8 @@ ${diffContext}`,
       return {
         pointIndex: i,
         diffType: p.type,
-        oldText: p.type === 'delete' ? p.text : '',
-        newText: p.type === 'add' ? p.text : '',
+        oldText: p.type === 'delete' ? p.text : p.type === 'modify' ? p.oldText || '' : '',
+        newText: p.type === 'add' ? p.text : p.type === 'modify' ? p.newText || p.text : '',
         isCore: review?.isCore ?? false,
         isNecessary: review?.isNecessary ?? true,
         alignsWithKnowledge: review?.alignsWithKnowledge ?? true,

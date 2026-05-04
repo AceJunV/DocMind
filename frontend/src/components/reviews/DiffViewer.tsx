@@ -23,6 +23,10 @@ export function DiffViewer({ result, className }: DiffViewerProps) {
             删除 {result.stats.deletions}
           </span>
           <span className="flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-200" />
+            修改 {result.stats.modifications}
+          </span>
+          <span className="flex items-center gap-1">
             <span className="inline-block h-2.5 w-2.5 rounded-sm bg-gray-100" />
             未变 {result.stats.equalLines}
           </span>
@@ -52,6 +56,21 @@ export function DiffViewer({ result, className }: DiffViewerProps) {
               >
                 <span className="mr-1.5 text-xs text-red-400 select-none">-</span>
                 {point.text}
+              </div>
+            )
+          }
+
+          if (point.type === 'modify') {
+            return (
+              <div key={key} className="space-y-1 border-l-[3px] border-amber-400 bg-amber-50 px-2 py-1 text-amber-950">
+                <div className="line-through decoration-red-400">
+                  <span className="mr-1.5 text-xs text-red-400 select-none">-</span>
+                  {point.oldText || point.text}
+                </div>
+                <div>
+                  <span className="mr-1.5 text-xs text-emerald-500 select-none">+</span>
+                  {point.newText || point.text}
+                </div>
               </div>
             )
           }

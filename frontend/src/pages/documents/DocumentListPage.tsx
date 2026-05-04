@@ -336,7 +336,7 @@ export default function DocumentListPage() {
               <div key={document.id} className="group relative">
                 <Link to={`/documents/${document.id}`} className="absolute inset-0 z-0 rounded-[28px]" />
 
-                <Card className="dm-panel-hover relative z-[1] h-full rounded-[28px]">
+                <Card className="dm-panel-hover pointer-events-none relative z-[1] h-full rounded-[28px]">
                   <CardContent className="pointer-events-none flex h-full flex-col p-5">
                     <div className="mb-4 flex items-start justify-between gap-3">
                       <div className={cn('rounded-2xl p-3 shadow-sm', fileColor)}>

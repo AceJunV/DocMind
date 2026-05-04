@@ -75,7 +75,7 @@ import { isModelConfigValid, useSettingsStore } from '@/stores/settingsStore'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { createId } from '@/utils/id'
-import type { ChatMessage, ChatMessageAttachment, Agent, DiscussionMode, Document, Review, ChatAgendaItem, DiscussionState, ChatRoomStrategy } from '@/types'
+import type { ChatMessage, ChatMessageAttachment, Agent, DiscussionMode, Document, Review, ChatAgendaItem, DiscussionState, ChatRoomStrategy, Suggestion } from '@/types'
 
 const EMPTY_MESSAGES: ChatMessage[] = []
 const EMPTY_PARTICIPANTS: Agent[] = []
@@ -742,6 +742,7 @@ export default function ChatRoomPage() {
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [slashQuery, setSlashQuery] = useState<string | null>(null)
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
+  const [filteredAgentId, setFilteredAgentId] = useState<string | null>(null)
   const [pendingAttachment, setPendingAttachment] = useState<ChatMessageAttachment | null>(null)
   const [showSearch, setShowSearch] = useState(false)
   const [showBookmarks, setShowBookmarks] = useState(false)
@@ -777,6 +778,35 @@ export default function ChatRoomPage() {
       .map((message) => (message.attachment ? documentMap.get(message.attachment.documentId) : undefined))
     return uniqueDocuments(recentAttachments)
   }, [documentMap, messages])
+  const validFilteredAgentId = useMemo(
+    () => participants.some((participant) => participant.id === filteredAgentId) ? filteredAgentId : null,
+    [filteredAgentId, participants]
+  )
+  const activeFilterAgent = useMemo(
+    () => participants.find((participant) => participant.id === validFilteredAgentId) || null,
+    [validFilteredAgentId, participants]
+  )
+  const visibleMessages = useMemo(() => {
+    if (!validFilteredAgentId) return messages
+    return messages.filter((message) => (
+      message.sender_type !== 'agent' ||
+      !message.sender_color ||
+      message.sender_id === validFilteredAgentId
+    ))
+  }, [messages, validFilteredAgentId])
+  const reviewSuggestions = useMemo(() => {
+    const collected = [
+      ...(review?.summary?.top_suggestions || []),
+      ...(review?.agent_reviews || []).flatMap((agentReview) => agentReview.suggestions || []),
+    ]
+    const seen = new Set<string>()
+    return collected.filter((suggestion) => {
+      const key = `${suggestion.title || ''}-${suggestion.content}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    }).slice(0, 8)
+  }, [review])
 
   const recordStrategyLog = useCallback(
     (input: Omit<StrategyLogInput, 'roomId'>) => {
@@ -1391,6 +1421,22 @@ export default function ChatRoomPage() {
     inputRef.current?.focus()
   }, [])
 
+  const handleFollowUp = useCallback((message: ChatMessage) => {
+    const quotedContent = message.content.replace(/\s+/g, ' ').trim().slice(0, 120)
+    setReplyTo(message)
+    setInput(`@${message.sender_name} 针对${message.sender_name}的观点：“${quotedContent}”\n\n我想追问：`)
+    inputRef.current?.focus()
+  }, [])
+
+  const handleQuoteSuggestion = useCallback((suggestion: Suggestion) => {
+    const suggestionText = suggestion.title
+      ? `${suggestion.title}：${suggestion.content}`
+      : suggestion.content
+    setInput(`引用评审建议：“${suggestionText}”\n\n请围绕这条建议展开讨论。`)
+    setReplyTo(null)
+    inputRef.current?.focus()
+  }, [])
+
   const handleSlashCommand = useCallback(
     (command: { id: string }) => {
       setSlashQuery(null)
@@ -1808,8 +1854,59 @@ export default function ChatRoomPage() {
             isActive={room.status === 'active' && !loading}
           />
 
+          {participants.length > 0 ? (
+            <div className="flex items-center gap-2 overflow-x-auto border-b border-gray-100 px-6 py-2.5">
+              <span className="shrink-0 text-xs font-medium text-gray-500">消息筛选</span>
+              <button
+                onClick={() => setFilteredAgentId(null)}
+                aria-pressed={!validFilteredAgentId}
+                className={cn(
+                  'h-8 shrink-0 rounded-full border px-3 text-xs font-medium transition-colors',
+                  !validFilteredAgentId
+                    ? 'border-primary-200 bg-primary-50 text-primary-700'
+                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+                )}
+              >
+                全部
+              </button>
+              {participants.map((participant) => {
+                const active = validFilteredAgentId === participant.id
+                return (
+                  <button
+                    key={participant.id}
+                    onClick={() => setFilteredAgentId((current) => current === participant.id ? null : participant.id)}
+                    aria-pressed={active}
+                    aria-label={`筛选 ${participant.name}`}
+                    title={`筛选 ${participant.name}`}
+                    className={cn(
+                      'flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors',
+                      active
+                        ? 'border-primary-200 bg-primary-50 text-primary-700'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                    )}
+                  >
+                    <span
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-[11px]"
+                      style={{ backgroundColor: `${AGENT_COLORS[participant.color]}18`, color: AGENT_COLORS[participant.color] }}
+                    >
+                      {participant.avatar || participant.name[0]}
+                    </span>
+                    <span className="max-w-24 truncate">{participant.name}</span>
+                  </button>
+                )
+              })}
+              {activeFilterAgent ? (
+                <span className="shrink-0 text-xs text-gray-400">仅显示 {activeFilterAgent.name} 的发言</span>
+              ) : null}
+            </div>
+          ) : null}
+
           <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto bg-gradient-to-b from-white to-gray-50/60 px-6 py-5">
-            {messages.map((message) => {
+            {visibleMessages.length === 0 ? (
+              <div className="mx-auto mt-10 max-w-sm rounded-xl border border-dashed border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">
+                当前筛选下暂无消息
+              </div>
+            ) : visibleMessages.map((message) => {
               const replyQuote = message.replyToMessage ? (
                 <div className="mb-1.5 rounded-md border-l-2 border-gray-300 bg-gray-100 px-3 py-1.5 text-xs dark:border-gray-500 dark:bg-gray-700/50">
                   <span className="font-medium text-gray-600 dark:text-gray-300">{message.replyToMessage.senderName}</span>
@@ -1881,12 +1978,10 @@ export default function ChatRoomPage() {
                         {new Date(message.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                       <button
-                        onClick={() => {
-                          setReplyTo(message)
-                          inputRef.current?.focus()
-                        }}
+                        onClick={() => handleFollowUp(message)}
                         className="ml-1 border-0 bg-transparent p-0 text-gray-400 opacity-0 transition-opacity hover:text-primary-500 group-hover:opacity-100 cursor-pointer"
-                        title="引用回复"
+                        title={`追问 ${message.sender_name}`}
+                        aria-label={`追问 ${message.sender_name}`}
                       >
                         <Reply className="h-3.5 w-3.5" />
                       </button>
@@ -2032,6 +2127,8 @@ export default function ChatRoomPage() {
                       toast('success', '已收藏最近一条消息')
                     }
                   }}
+                  suggestions={reviewSuggestions}
+                  onSuggestionQuote={handleQuoteSuggestion}
                   onControl={handleControlAction}
                   disabled={loading}
                 />

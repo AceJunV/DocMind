@@ -17,6 +17,45 @@ export class LLMError extends Error {
   }
 }
 
+export function getLlmErrorUserMessage(code: LLMError['code'], status?: number, detail = '') {
+  const detailText = detail.trim()
+  const suffix = detailText ? `\n\n服务返回：${detailText.slice(0, 240)}` : ''
+
+  if (code === 'no_config' || code === 'invalid_config') {
+    return '模型配置不完整：请先到「设置」页面确认 API Key、模型名称和接口地址，然后重试。'
+  }
+
+  if (code === 'network') {
+    return '网络连接或请求超时：暂时无法连接到模型服务。请检查网络、接口地址或代理设置，然后点击重试。'
+  }
+
+  if (code === 'parse_error') {
+    return '模型返回格式异常：系统没有读到可解析的流式内容。请重试；如果连续出现，请切换模型或降低并发。'
+  }
+
+  if (code === 'aborted') {
+    return '请求已取消：本轮生成已停止，可以重新发起评审。'
+  }
+
+  if (status === 401 || status === 403) {
+    return `API 鉴权失败：API Key 无效、无权限或接口地址不匹配。请检查设置后重试。${suffix}`
+  }
+
+  if (status === 429) {
+    return `API 额度或频率受限：当前 Key 可能余额不足、额度耗尽或请求过快。请稍后重试，或更换可用 Key。${suffix}`
+  }
+
+  if (status && status >= 500) {
+    return `模型服务暂时不可用：服务端返回 ${status}。请稍后重试；如果持续失败，请切换服务商或模型。${suffix}`
+  }
+
+  if (status) {
+    return `API 请求失败：服务端返回 ${status}。请检查模型名称、接口地址和请求参数后重试。${suffix}`
+  }
+
+  return `API 调用失败：请检查模型配置后重试。${suffix}`
+}
+
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
@@ -34,7 +73,7 @@ const MAX_REQUEST_ATTEMPTS = 3
 function getConfig() {
   const config = useSettingsStore.getState().currentConfig
   if (!config || !isModelConfigValid(config)) {
-    throw new LLMError('请先在设置页面配置有效的 API Key 和模型', 'no_config')
+    throw new LLMError(getLlmErrorUserMessage('no_config'), 'no_config')
   }
 
   return resolveModelConfig(config)
@@ -81,11 +120,11 @@ export async function chatCompletion(
       })
     } catch (error: unknown) {
       if (error instanceof DOMException && error.name === 'AbortError') {
-        throw new LLMError('请求已取消', 'aborted')
+        throw new LLMError(getLlmErrorUserMessage('aborted'), 'aborted')
       }
 
       if (attempt >= MAX_REQUEST_ATTEMPTS) {
-        throw new LLMError('网络连接失败，请检查网络和接口地址', 'network')
+        throw new LLMError(getLlmErrorUserMessage('network'), 'network')
       }
 
       await sleepWithSignal(getRetryDelayMs(attempt), signal)
@@ -107,16 +146,16 @@ export async function chatCompletion(
       continue
     }
 
-    throw new LLMError(`API 返回错误 (${response.status}): ${lastDetail}`, 'api_error', response.status)
+    throw new LLMError(getLlmErrorUserMessage('api_error', response.status, lastDetail), 'api_error', response.status)
   }
 
   if (!response?.ok) {
-    throw new LLMError(`API 返回错误 (${lastStatus || 'unknown'}): ${lastDetail}`, 'api_error', lastStatus)
+    throw new LLMError(getLlmErrorUserMessage('api_error', lastStatus, lastDetail), 'api_error', lastStatus)
   }
 
   const reader = response.body?.getReader()
   if (!reader) {
-    throw new LLMError('无法读取响应流', 'parse_error')
+    throw new LLMError(getLlmErrorUserMessage('parse_error'), 'parse_error')
   }
 
   const decoder = new TextDecoder()
@@ -159,7 +198,7 @@ export async function chatCompletion(
       return
     }
 
-    const llmError = new LLMError('读取流式响应时出错', 'parse_error')
+    const llmError = new LLMError(getLlmErrorUserMessage('parse_error'), 'parse_error')
     callbacks.onError(llmError)
     throw llmError
   }

@@ -8,11 +8,14 @@ import {
   File,
   FileCode,
   FileText,
+  CheckCircle2,
+  MessageCircle,
   Tag,
   Trash2,
 } from 'lucide-react'
 import { useDocumentStore } from '@/stores/documentStore'
 import { useReviewStore } from '@/stores/reviewStore'
+import { useChatStore } from '@/stores/chatStore'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { formatFileSize, formatTimeAgo } from '@/utils/format'
@@ -43,6 +46,31 @@ export default function DocumentDetailPage() {
   const removeDocument = useDocumentStore((state) => state.removeDocument)
   const reviews = useReviewStore((state) => state.reviews)
   const reviewsForDocument = useMemo(() => reviews.filter((review) => review.document_id === id), [reviews, id])
+  const chatRooms = useChatStore((state) => state.rooms)
+  const reviewIdsForDocument = useMemo(() => new Set(reviewsForDocument.map((review) => review.id)), [reviewsForDocument])
+  const chatRoomsForDocument = useMemo(
+    () => chatRooms.filter((room) => room.document_id === id || (room.review_id ? reviewIdsForDocument.has(room.review_id) : false)),
+    [chatRooms, id, reviewIdsForDocument]
+  )
+  const suggestionStats = useMemo(() => {
+    const suggestions = reviewsForDocument.flatMap((review) => [
+      ...(review.summary?.top_suggestions || []),
+      ...(review.agent_reviews || []).flatMap((agentReview) => agentReview.suggestions || []),
+    ])
+    const uniqueSuggestions = Array.from(
+      new Map(suggestions.map((suggestion) => [`${suggestion.title || ''}-${suggestion.content}`, suggestion])).values()
+    )
+    const adopted = uniqueSuggestions.filter((suggestion) => suggestion.adopted).length
+    const highPriority = uniqueSuggestions.filter((suggestion) => suggestion.priority === 'high').length
+
+    return {
+      total: uniqueSuggestions.length,
+      adopted,
+      pending: uniqueSuggestions.length - adopted,
+      highPriority,
+      rate: uniqueSuggestions.length > 0 ? Math.round((adopted / uniqueSuggestions.length) * 100) : 0,
+    }
+  }, [reviewsForDocument])
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   if (!document) {
@@ -232,6 +260,7 @@ export default function DocumentDetailPage() {
           ) : null}
         </div>
 
+        <div className="space-y-4">
         <Card className="rounded-[28px]">
           <CardHeader className="flex items-center justify-between">
             <div>
@@ -295,6 +324,80 @@ export default function DocumentDetailPage() {
             )}
           </CardContent>
         </Card>
+        <Card className="rounded-[28px]">
+          <CardHeader className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">关联聊天室</h2>
+              <p className="mt-1 text-xs text-gray-500">展示和该文档有关的讨论房间，便于从文档继续追踪讨论。</p>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {chatRoomsForDocument.length === 0 ? (
+              <div className="py-8 text-center">
+                <MessageCircle className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+                <p className="text-sm text-gray-500">还没有关联聊天室</p>
+                <p className="mt-1 text-xs text-gray-400">从评审页发起聊天室后，这里会自动汇总展示。</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {chatRoomsForDocument.map((room) => (
+                  <Link
+                    key={room.id}
+                    to={`/chat/${room.id}`}
+                    className="block rounded-2xl border border-gray-100 bg-gray-50/70 p-4 transition-colors hover:bg-gray-50 no-underline"
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{room.topic}</p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {room.participants.length} 位角色 · {room.status === 'active' ? '进行中' : '已关闭'}
+                        </p>
+                      </div>
+                      <MessageCircle className="h-4 w-4 text-primary-500" />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="rounded-[28px]">
+          <CardHeader>
+            <h2 className="text-sm font-semibold text-gray-900">建议采纳统计</h2>
+          </CardHeader>
+          <CardContent>
+            {suggestionStats.total === 0 ? (
+              <div className="py-8 text-center">
+                <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+                <p className="text-sm text-gray-500">还没有可统计的建议</p>
+                <p className="mt-1 text-xs text-gray-400">完成评审后，建议采纳情况会在这里汇总。</p>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                  <p className="text-xs text-gray-500">建议总数</p>
+                  <p className="mt-2 text-2xl font-bold text-gray-900">{suggestionStats.total}</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                  <p className="text-xs text-emerald-700">已采纳</p>
+                  <p className="mt-2 text-2xl font-bold text-emerald-700">{suggestionStats.adopted}</p>
+                </div>
+                <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+                  <p className="text-xs text-amber-700">待采纳</p>
+                  <p className="mt-2 text-2xl font-bold text-amber-700">{suggestionStats.pending}</p>
+                </div>
+                <div className="rounded-2xl border border-primary-100 bg-primary-50/70 p-4">
+                  <p className="text-xs text-primary-700">采纳率</p>
+                  <p className="mt-2 text-2xl font-bold text-primary-700">{suggestionStats.rate}%</p>
+                </div>
+              </div>
+            )}
+            {suggestionStats.highPriority > 0 ? (
+              <p className="mt-3 text-xs text-gray-500">其中 {suggestionStats.highPriority} 条为高优先级建议。</p>
+            ) : null}
+          </CardContent>
+        </Card>
+        </div>
       </section>
 
       <ConfirmDialog

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Bot, Loader2, RefreshCw, Save, Sparkles, Undo2, Wand2, X } from 'lucide-react'
+import { ArrowLeft, Bot, History, Loader2, Save, Sparkles, Undo2, Wand2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgentStore, AGENT_COLORS } from '@/stores/agentStore'
 import { optimizePrompt, continuePrompt } from '@/services/llmService'
@@ -56,7 +56,7 @@ export default function AgentEditPage() {
     try {
       const result = await continuePrompt(systemPrompt, {
         onChunk: () => {},
-        onDone: (text) => setSystemPrompt((prev) => prev + '\n\n' + text),
+        onDone: () => {},
         onError: (err) => toast('error', `AI续写失败: ${err.message}`),
       })
       if (result) setSystemPrompt((prev) => prev + '\n\n' + result)
