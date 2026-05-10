@@ -16,11 +16,11 @@ export function AuthLayout() {
             教研案评审平台
           </h1>
           <p className="text-lg text-white/80 leading-relaxed">
-            上传教研案，教研老师、学生、家长多视角评审，六维度精准分析。
+            上传教研案，课程、题目、剧本、课堂和学生视角多角色评审。
             进入教研研讨室深度讨论，发现教学设计的改进空间。
           </p>
           <div className="mt-10 flex gap-4">
-            {['📐 周老师', '🎒 小明', '📈 刘妈妈', '🧩 张老师'].map((name) => (
+            {['📐 课程专家', '🎬 剧本老顽童', '🎒 学生代表', '🧑‍🏫 真验教师'].map((name) => (
               <div
                 key={name}
                 className="rounded-full bg-white/15 backdrop-blur px-3 py-1.5 text-sm font-medium"

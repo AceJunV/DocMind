@@ -18,9 +18,9 @@ import type { Agent, AgentTemplate, AgentColor, AgentCategory, TeachingDimension
 import { TEACHING_DIMENSIONS } from '@/types'
 
 const TEMPLATE_GROUPS: { label: string; icon: string; ids: string[] }[] = [
-  { label: '教研老师', icon: '📐', ids: ['tpl-edu-1', 'tpl-edu-2', 'tpl-edu-3', 'tpl-edu-4', 'tpl-edu-5', 'tpl-edu-6'] },
-  { label: '学生视角', icon: '🎒', ids: ['tpl-stu-1', 'tpl-stu-2', 'tpl-stu-3'] },
-  { label: '家长视角', icon: '👨‍👩‍👧', ids: ['tpl-par-1', 'tpl-par-2', 'tpl-par-3'] },
+  { label: '课程与课堂专家', icon: '📐', ids: ['tpl-course-expert', 'tpl-real-classroom-teacher'] },
+  { label: '内容与题目专家', icon: '🎬', ids: ['tpl-script-veteran', 'tpl-question-researcher'] },
+  { label: '学习者视角', icon: '🎒', ids: ['tpl-child-cognition-expert', 'tpl-student-representative'] },
 ]
 
 const ALL_COLORS: AgentColor[] = ['indigo', 'violet', 'pink', 'orange', 'teal', 'sky', 'slate', 'green', 'rose', 'amber', 'emerald', 'cyan']

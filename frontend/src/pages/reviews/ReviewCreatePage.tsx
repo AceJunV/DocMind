@@ -40,6 +40,8 @@ type ReviewProgressItem = {
   dimensionsCompleted: number
 }
 
+const MAX_REVIEW_AGENTS = 6
+
 function getTimestampMs() {
   return Date.now()
 }
@@ -281,8 +283,12 @@ function buildFallbackActivityCopy(agent: Agent): AgentActivityCopy {
 }
 
 function getAgentActivityCopy(agent: Agent) {
+  const focusCopy = agent.focusDimension && agent.focusDimension in FOCUS_ACTIVITY_COPY
+    ? FOCUS_ACTIVITY_COPY[agent.focusDimension as TeachingDimension]
+    : undefined
+
   return AGENT_ACTIVITY_COPY[agent.name]
-    || (agent.focusDimension ? FOCUS_ACTIVITY_COPY[agent.focusDimension] : undefined)
+    || focusCopy
     || buildFallbackActivityCopy(agent)
 }
 
@@ -543,8 +549,8 @@ export default function ReviewCreatePage() {
         return previous.filter((item) => item !== id)
       }
 
-      if (previous.length >= 5) {
-        toast('info', '最多选择 5 个角色')
+      if (previous.length >= MAX_REVIEW_AGENTS) {
+        toast('info', `最多选择 ${MAX_REVIEW_AGENTS} 个角色`)
         return previous
       }
 
@@ -553,10 +559,10 @@ export default function ReviewCreatePage() {
   }
 
   const selectAllAgents = () => {
-    const nextIds = agents.slice(0, 5).map((agent) => agent.id)
+    const nextIds = agents.slice(0, MAX_REVIEW_AGENTS).map((agent) => agent.id)
     setSelectedAgentIds(nextIds)
-    if (agents.length > 5) {
-      toast('info', '最多选择 5 个角色，已选择前 5 个')
+    if (agents.length > MAX_REVIEW_AGENTS) {
+      toast('info', `最多选择 ${MAX_REVIEW_AGENTS} 个角色，已选择前 ${MAX_REVIEW_AGENTS} 个`)
     }
   }
 
@@ -1222,7 +1228,7 @@ export default function ReviewCreatePage() {
                     {selectedAgentIds.length > 0 ? '清空' : '全选'}
                   </button>
                 )}
-                <Badge variant="default">{selectedAgentIds.length}/5</Badge>
+                <Badge variant="default">{selectedAgentIds.length}/{MAX_REVIEW_AGENTS}</Badge>
               </div>
             </div>
           </CardHeader>

@@ -98,7 +98,7 @@ export interface Agent {
   usage_count: number
   color: AgentColor
   category?: AgentCategory
-  focusDimension?: TeachingDimension
+  focusDimension?: string
   creation_history?: { role: 'ai' | 'user'; content: string }[]
   last_used_at?: string
   created_at: string
@@ -114,7 +114,8 @@ export interface AgentTemplate {
   tags: string[]
   description: string
   category: AgentCategory
-  focusDimension?: TeachingDimension
+  focusDimension?: string
+  systemPrompt?: string
   personality: AgentPersonality
   expertise: string[]
   behavior: {
