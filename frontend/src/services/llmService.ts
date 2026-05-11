@@ -70,6 +70,7 @@ interface StreamCallbacks {
 
 const RETRYABLE_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504])
 const MAX_REQUEST_ATTEMPTS = 3
+const LLM_PROXY_ENDPOINT = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/llm-proxy/chat/completions`
 
 function getConfig(configOverride?: Partial<ModelConfig>) {
   const config = configOverride ?? useSettingsStore.getState().currentConfig
@@ -98,6 +99,39 @@ export function buildChatCompletionsUrl(baseUrl: string) {
   return `${trimmed}/chat/completions`
 }
 
+export function shouldUseLlmProxy(config: Pick<ModelConfig, 'providerMode'>) {
+  return config.providerMode !== 'local'
+}
+
+function buildLlmFetchRequest(config: ModelConfig, payload: Record<string, unknown>): {
+  url: string
+  headers: Record<string, string>
+  body: string
+} {
+  const targetUrl = buildChatCompletionsUrl(config.baseUrl)
+
+  if (shouldUseLlmProxy(config)) {
+    return {
+      url: LLM_PROXY_ENDPOINT,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetUrl,
+        apiKey: config.apiKey,
+        payload,
+      }),
+    }
+  }
+
+  return {
+    url: targetUrl,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify(payload),
+  }
+}
+
 async function readErrorDetail(response: Response) {
   try {
     const body = await response.json()
@@ -113,11 +147,13 @@ export async function chatCompletion(
   signal?: AbortSignal,
 ): Promise<void> {
   const config = getConfig()
-  const url = buildChatCompletionsUrl(config.baseUrl)
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${config.apiKey}`,
-  }
+  const request = buildLlmFetchRequest(config, {
+    model: config.model,
+    messages,
+    stream: true,
+    temperature: 0.7,
+    max_tokens: 4096,
+  })
 
   let response: Response | null = null
   let lastStatus: number | undefined
@@ -125,16 +161,10 @@ export async function chatCompletion(
 
   for (let attempt = 1; attempt <= MAX_REQUEST_ATTEMPTS; attempt += 1) {
     try {
-      response = await fetch(url, {
+      response = await fetch(request.url, {
         method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: config.model,
-          messages,
-          stream: true,
-          temperature: 0.7,
-          max_tokens: 4096,
-        }),
+        headers: request.headers,
+        body: request.body,
         signal,
       })
     } catch (error: unknown) {
@@ -310,18 +340,15 @@ export async function continuePrompt(
 export async function testConnection(configOverride?: Partial<ModelConfig>): Promise<{ ok: boolean; message: string; model?: string }> {
   try {
     const config = getConfig(configOverride)
-    const url = buildChatCompletionsUrl(config.baseUrl)
-    const res = await fetch(url, {
+    const request = buildLlmFetchRequest(config, {
+      model: config.model,
+      messages: [{ role: 'user', content: '你好' }],
+      max_tokens: 10,
+    })
+    const res = await fetch(request.url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages: [{ role: 'user', content: '你好' }],
-        max_tokens: 10,
-      }),
+      headers: request.headers,
+      body: request.body,
     })
 
     if (!res.ok) {

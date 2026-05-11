@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildChatCompletionsUrl, getLlmErrorUserMessage } from '../llmService'
+import { buildChatCompletionsUrl, getLlmErrorUserMessage, shouldUseLlmProxy } from '../llmService'
 
 describe('getLlmErrorUserMessage', () => {
   it('distinguishes network timeouts, quota limits, and parse errors', () => {
@@ -25,5 +25,16 @@ describe('buildChatCompletionsUrl', () => {
   it('keeps explicit API versions and full chat completion endpoints', () => {
     expect(buildChatCompletionsUrl('https://api.aipaibox.com/v1')).toBe('https://api.aipaibox.com/v1/chat/completions')
     expect(buildChatCompletionsUrl('https://api.aipaibox.com/v1/chat/completions')).toBe('https://api.aipaibox.com/v1/chat/completions')
+  })
+})
+
+describe('shouldUseLlmProxy', () => {
+  it('routes official and third-party providers through the same-origin proxy', () => {
+    expect(shouldUseLlmProxy({ providerMode: 'official' })).toBe(true)
+    expect(shouldUseLlmProxy({ providerMode: 'third-party' })).toBe(true)
+  })
+
+  it('keeps local providers as direct browser requests', () => {
+    expect(shouldUseLlmProxy({ providerMode: 'local' })).toBe(false)
   })
 })
