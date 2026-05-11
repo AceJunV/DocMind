@@ -351,6 +351,8 @@ export interface RoleEvent {
 }
 
 export type ProviderMode = 'official' | 'third-party' | 'local'
+export type LlmProtocol = 'openai-chat'
+export type AuthHeaderMode = 'bearer' | 'x-api-key' | 'api-key' | 'custom'
 
 // 文件对比评审类型
 export type DiffType = 'add' | 'delete' | 'modify' | 'equal'
@@ -378,9 +380,15 @@ export type ReviewMode = 'single' | 'compare'
 
 export interface ModelConfig {
   providerMode: ProviderMode
+  protocol?: LlmProtocol
   model: string
+  requestModel?: string
   apiKey: string
   baseUrl: string
+  endpointUrl?: string
+  authHeaderMode?: AuthHeaderMode
+  customAuthHeader?: string
+  customHeaders?: string
   localEndpoint: string
   maxConcurrentReviews?: number
 }

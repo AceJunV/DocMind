@@ -5,9 +5,15 @@ import { createId } from '@/utils/id'
 
 const DEFAULT_CONFIG: ModelConfig = {
   providerMode: 'official',
+  protocol: 'openai-chat',
   model: '',
+  requestModel: '',
   apiKey: '',
   baseUrl: '',
+  endpointUrl: '',
+  authHeaderMode: 'bearer',
+  customAuthHeader: '',
+  customHeaders: '',
   localEndpoint: '',
   maxConcurrentReviews: 1,
 }
@@ -61,6 +67,8 @@ export function resolveOfficialBaseUrl(model: string): string | null {
 
 export function resolveModelConfig(config: Partial<ModelConfig>): ModelConfig {
   const resolved = { ...DEFAULT_CONFIG, ...config }
+  if (!resolved.protocol) resolved.protocol = 'openai-chat'
+  if (!resolved.authHeaderMode) resolved.authHeaderMode = 'bearer'
   if (resolved.providerMode === 'official' && resolved.model) {
     const url = resolveOfficialBaseUrl(resolved.model)
     if (url) resolved.baseUrl = url
@@ -74,7 +82,11 @@ export function resolveModelConfig(config: Partial<ModelConfig>): ModelConfig {
 export function isModelConfigValid(config: Partial<ModelConfig> | undefined): boolean {
   if (!config) return false
   const resolved = resolveModelConfig(config)
-  return Boolean(resolved.model?.trim() && resolved.apiKey?.trim() && resolved.baseUrl?.trim())
+  return Boolean(
+    resolved.model?.trim() &&
+    resolved.apiKey?.trim() &&
+    (resolved.endpointUrl?.trim() || resolved.baseUrl?.trim())
+  )
 }
 
 interface SettingsState {

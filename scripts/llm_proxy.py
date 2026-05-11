@@ -23,6 +23,12 @@ HOP_BY_HOP_HEADERS = {
     "transfer-encoding",
     "upgrade",
 }
+BLOCKED_OUTBOUND_HEADERS = {
+    "host",
+    "connection",
+    "content-length",
+    "transfer-encoding",
+}
 
 
 def _is_public_hostname(hostname: str) -> bool:
@@ -76,6 +82,9 @@ class LlmProxyHandler(BaseHTTPRequestHandler):
             request_body = self._read_json_body()
             target_url = _validate_target_url(str(request_body.get("targetUrl", "")))
             api_key = str(request_body.get("apiKey", "")).strip()
+            auth_header_mode = str(request_body.get("authHeaderMode", "bearer")).strip() or "bearer"
+            custom_auth_header = str(request_body.get("customAuthHeader", "")).strip()
+            extra_headers = self._read_extra_headers(request_body.get("headers"))
             payload = request_body.get("payload")
             if not api_key or not isinstance(payload, dict):
                 raise ValueError("apiKey and payload are required")
@@ -84,16 +93,20 @@ class LlmProxyHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": str(exc)})
             return
 
+        outbound_headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+            "User-Agent": "DocMind-LLM-Proxy/1.0",
+            **extra_headers,
+        }
+        auth_header_name = self._resolve_auth_header_name(auth_header_mode, custom_auth_header)
+        outbound_headers[auth_header_name] = f"Bearer {api_key}" if auth_header_mode == "bearer" else api_key
+
         outbound = urllib.request.Request(
             target_url,
             data=json.dumps(payload).encode("utf-8"),
             method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
-                "Accept": "application/json, text/event-stream",
-                "User-Agent": "DocMind-LLM-Proxy/1.0",
-            },
+            headers=outbound_headers,
         )
 
         try:
@@ -176,6 +189,34 @@ class LlmProxyHandler(BaseHTTPRequestHandler):
         except (TypeError, ValueError) as exc:
             raise ValueError("timeoutSeconds must be a number") from exc
         return max(MIN_TIMEOUT_SECONDS, min(MAX_TIMEOUT_SECONDS, timeout_seconds))
+
+    def _read_extra_headers(self, value: object) -> dict[str, str]:
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValueError("headers must be an object")
+
+        headers: dict[str, str] = {}
+        for key, raw_value in value.items():
+            header_name = str(key).strip()
+            header_value = str(raw_value).strip()
+            if not header_name or not header_value:
+                continue
+            if header_name.lower() in BLOCKED_OUTBOUND_HEADERS:
+                continue
+            headers[header_name] = header_value
+        return headers
+
+    def _resolve_auth_header_name(self, mode: str, custom_name: str) -> str:
+        if mode == "x-api-key":
+            return "X-API-Key"
+        if mode == "api-key":
+            return "api-key"
+        if mode == "custom":
+            if not custom_name:
+                raise ValueError("customAuthHeader is required")
+            return custom_name
+        return "Authorization"
 
     def _send_json(self, status: int, payload: dict) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")

@@ -100,16 +100,52 @@ export function buildChatCompletionsUrl(baseUrl: string) {
   return `${trimmed}/chat/completions`
 }
 
+function joinUrl(baseUrl: string, path: string) {
+  return `${baseUrl.trim().replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
+}
+
+export function buildChatCompletionsCandidates(baseUrl: string) {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '')
+  if (!trimmed) return []
+  if (/\/chat\/completions$/i.test(trimmed)) return [trimmed]
+
+  const candidates = [
+    buildChatCompletionsUrl(trimmed),
+    joinUrl(trimmed, 'chat/completions'),
+    joinUrl(trimmed, 'openai/v1/chat/completions'),
+    joinUrl(trimmed, 'api/v1/chat/completions'),
+  ]
+  return [...new Set(candidates)]
+}
+
+function getChatCompletionsTargetUrl(config: ModelConfig) {
+  return config.endpointUrl?.trim() || buildChatCompletionsUrl(config.baseUrl)
+}
+
 export function shouldUseLlmProxy(config: Pick<ModelConfig, 'providerMode'>) {
   return config.providerMode !== 'local'
 }
 
-function buildLlmFetchRequest(config: ModelConfig, payload: Record<string, unknown>): {
+function parseCustomHeaders(input = '') {
+  const headers: Record<string, string> = {}
+  for (const line of input.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const separatorIndex = trimmed.indexOf(':')
+    if (separatorIndex <= 0) continue
+    const key = trimmed.slice(0, separatorIndex).trim()
+    const value = trimmed.slice(separatorIndex + 1).trim()
+    if (key && value) headers[key] = value
+  }
+  return headers
+}
+
+function buildLlmFetchRequest(config: ModelConfig, payload: Record<string, unknown>, targetUrl = getChatCompletionsTargetUrl(config)): {
   url: string
   headers: Record<string, string>
   body: string
 } {
-  const targetUrl = buildChatCompletionsUrl(config.baseUrl)
+  const extraHeaders = parseCustomHeaders(config.customHeaders)
 
   if (shouldUseLlmProxy(config)) {
     return {
@@ -118,6 +154,9 @@ function buildLlmFetchRequest(config: ModelConfig, payload: Record<string, unkno
       body: JSON.stringify({
         targetUrl,
         apiKey: config.apiKey,
+        authHeaderMode: config.authHeaderMode || 'bearer',
+        customAuthHeader: config.customAuthHeader,
+        headers: extraHeaders,
         payload,
         timeoutSeconds: payload.stream === true ? 90 : 20,
       }),
@@ -129,8 +168,17 @@ function buildLlmFetchRequest(config: ModelConfig, payload: Record<string, unkno
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey}`,
+      ...extraHeaders,
     },
     body: JSON.stringify(payload),
+  }
+}
+
+function buildPayload(config: ModelConfig, messages: ChatMessage[], options: Record<string, unknown>) {
+  return {
+    model: config.requestModel?.trim() || config.model,
+    messages,
+    ...options,
   }
 }
 
@@ -164,13 +212,11 @@ export async function chatCompletion(
   signal?: AbortSignal,
 ): Promise<void> {
   const config = getConfig()
-  const request = buildLlmFetchRequest(config, {
-    model: config.model,
-    messages,
+  const request = buildLlmFetchRequest(config, buildPayload(config, messages, {
     stream: true,
     temperature: 0.7,
     max_tokens: 4096,
-  })
+  }))
 
   let response: Response | null = null
   let lastStatus: number | undefined
@@ -354,17 +400,17 @@ export async function continuePrompt(
   return result || currentText
 }
 
-export async function testConnection(configOverride?: Partial<ModelConfig>): Promise<{ ok: boolean; message: string; model?: string }> {
+export async function testConnection(configOverride?: Partial<ModelConfig>): Promise<{ ok: boolean; message: string; model?: string; endpoint?: string }> {
   const controller = new AbortController()
   const timeoutId = window.setTimeout(() => controller.abort(), TEST_CONNECTION_TIMEOUT_MS)
 
   try {
     const config = getConfig(configOverride)
-    const request = buildLlmFetchRequest(config, {
-      model: config.model,
-      messages: [{ role: 'user', content: '你好' }],
+    const messages: ChatMessage[] = [{ role: 'user', content: '你好' }]
+    const payload = buildPayload(config, messages, {
       max_tokens: 10,
     })
+    const request = buildLlmFetchRequest(config, payload)
     const res = await fetch(request.url, {
       method: 'POST',
       headers: request.headers,
@@ -385,6 +431,7 @@ export async function testConnection(configOverride?: Partial<ModelConfig>): Pro
       ok: true,
       message: '连接成功！',
       model: body.model || config.model,
+      endpoint: getChatCompletionsTargetUrl(config),
     }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
@@ -398,5 +445,63 @@ export async function testConnection(configOverride?: Partial<ModelConfig>): Pro
     return { ok: false, message: '网络连接失败' }
   } finally {
     window.clearTimeout(timeoutId)
+  }
+}
+
+export async function diagnoseConnection(configOverride?: Partial<ModelConfig>): Promise<{
+  ok: boolean
+  message: string
+  endpoint?: string
+  attempts: Array<{ endpoint: string; ok: boolean; status?: number; detail: string }>
+}> {
+  const config = getConfig(configOverride)
+  const candidates = config.endpointUrl?.trim()
+    ? [config.endpointUrl.trim()]
+    : buildChatCompletionsCandidates(config.baseUrl)
+  const attempts: Array<{ endpoint: string; ok: boolean; status?: number; detail: string }> = []
+
+  for (const endpoint of candidates) {
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), TEST_CONNECTION_TIMEOUT_MS)
+    try {
+      const payload = buildPayload(config, [{ role: 'user', content: '你好' }], { max_tokens: 10 })
+      const request = buildLlmFetchRequest(config, payload, endpoint)
+      const res = await fetch(request.url, {
+        method: 'POST',
+        headers: request.headers,
+        body: request.body,
+        signal: controller.signal,
+      })
+      if (res.ok) {
+        return {
+          ok: true,
+          message: `诊断成功：${endpoint}`,
+          endpoint,
+          attempts: [...attempts, { endpoint, ok: true, status: res.status, detail: '连接成功' }],
+        }
+      }
+
+      const body = await res.json().catch(() => ({}))
+      attempts.push({ endpoint, ok: false, status: res.status, detail: getResponseErrorDetail(body) })
+    } catch (error) {
+      attempts.push({
+        endpoint,
+        ok: false,
+        detail: error instanceof DOMException && error.name === 'AbortError'
+          ? '测试连接超时'
+          : error instanceof Error
+            ? error.message
+            : '网络连接失败',
+      })
+    } finally {
+      window.clearTimeout(timeoutId)
+    }
+  }
+
+  const first = attempts[0]
+  return {
+    ok: false,
+    message: first ? `诊断失败：${first.status ? `HTTP ${first.status} ` : ''}${first.detail}` : '没有可诊断的接口地址',
+    attempts,
   }
 }

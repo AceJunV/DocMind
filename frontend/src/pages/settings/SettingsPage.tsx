@@ -18,6 +18,7 @@ import {
   Loader2,
   Download,
   AlertTriangle,
+  Wrench,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -26,7 +27,7 @@ import {
   MODEL_REGISTRY,
   resolveOfficialBaseUrl,
 } from '@/stores/settingsStore'
-import { testConnection } from '@/services/llmService'
+import { diagnoseConnection, testConnection } from '@/services/llmService'
 import { toast as globalToast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { ModelConfig, ProviderMode, SavedModelProfile } from '@/types'
@@ -43,9 +44,15 @@ function getDefaultForm(): FormValues {
   return {
     profileName: '',
     providerMode: 'official',
+    protocol: 'openai-chat',
     model: '',
+    requestModel: '',
     apiKey: '',
     baseUrl: '',
+    endpointUrl: '',
+    authHeaderMode: 'bearer',
+    customAuthHeader: '',
+    customHeaders: '',
     localEndpoint: '',
     maxConcurrentReviews: 1,
   }
@@ -81,6 +88,33 @@ function TestConnectionButton({ config }: { config: ModelConfig }) {
   )
 }
 
+function DiagnoseConnectionButton({ config }: { config: ModelConfig }) {
+  const [testing, setTesting] = useState(false)
+  return (
+    <button
+      onClick={async () => {
+        setTesting(true)
+        const result = await diagnoseConnection(config)
+        setTesting(false)
+        if (result.ok) {
+          globalToast('success', result.message)
+        } else {
+          const detail = result.attempts
+            .slice(0, 4)
+            .map((item) => `${item.endpoint} -> ${item.status ? `HTTP ${item.status} ` : ''}${item.detail}`)
+            .join('\n')
+          globalToast('error', `${result.message}${detail ? `\n\n${detail}` : ''}`)
+        }
+      }}
+      disabled={testing}
+      className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer bg-white transition-colors disabled:opacity-50"
+    >
+      {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+      {testing ? '诊断中...' : '诊断连接'}
+    </button>
+  )
+}
+
 export default function SettingsPage() {
   const {
     profiles,
@@ -98,6 +132,7 @@ export default function SettingsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(initialProfile?.id ?? null)
   const [isCreating, setIsCreating] = useState(profiles.length === 0)
   const [showApiKey, setShowApiKey] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
@@ -156,7 +191,7 @@ export default function SettingsPage() {
       }
     }
     if (form.providerMode === 'third-party' && !form.baseUrl.trim()) {
-      errs.baseUrl = '第三方模式必须填写 Base URL'
+      if (!form.endpointUrl?.trim()) errs.baseUrl = '第三方模式必须填写 Base URL 或完整接口地址'
     }
     if (form.providerMode === 'local' && !form.localEndpoint.trim()) {
       errs.localEndpoint = '本地模式必须填写本地地址'
@@ -364,7 +399,7 @@ export default function SettingsPage() {
                   </div>
                   <p className="text-xs text-gray-400 mt-1">
                     {form.providerMode === 'official' && '官方模式会自动推断接口地址'}
-                    {form.providerMode === 'third-party' && '需要手动填写中转站 Base URL'}
+                    {form.providerMode === 'third-party' && '默认 OpenAI Chat Completions，可在高级配置中填完整接口地址'}
                     {form.providerMode === 'local' && '使用本地部署的模型服务'}
                   </p>
                 </div>
@@ -478,6 +513,89 @@ export default function SettingsPage() {
                 </div>
               )}
 
+              {form.providerMode === 'third-party' && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-4">
+                  <button
+                    type="button"
+                    onClick={() => setAdvancedOpen((open) => !open)}
+                    className="flex w-full items-center justify-between border-0 bg-transparent p-0 text-left cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2 text-sm font-medium text-gray-800">
+                      <Wrench className="h-4 w-4 text-primary-500" /> 高级中转配置
+                    </span>
+                    <ChevronDown className={cn('h-4 w-4 text-gray-400 transition-transform', advancedOpen && 'rotate-180')} />
+                  </button>
+                  {advancedOpen && (
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">完整接口地址</label>
+                        <input
+                          type="text"
+                          value={form.endpointUrl || ''}
+                          onChange={(e) => updateField('endpointUrl', e.target.value)}
+                          placeholder="例如：https://example.com/openai/v1/chat/completions"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">填写后会优先使用此地址，不再自动拼接 /v1/chat/completions。</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1.5">实际请求模型名</label>
+                          <input
+                            type="text"
+                            value={form.requestModel || ''}
+                            onChange={(e) => updateField('requestModel', e.target.value)}
+                            placeholder="留空则使用上方模型名称"
+                            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1.5">鉴权 Header</label>
+                          <div className="relative">
+                            <select
+                              value={form.authHeaderMode || 'bearer'}
+                              onChange={(e) => updateField('authHeaderMode', e.target.value as ModelConfig['authHeaderMode'])}
+                              className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                            >
+                              <option value="bearer">Authorization: Bearer</option>
+                              <option value="x-api-key">X-API-Key</option>
+                              <option value="api-key">api-key</option>
+                              <option value="custom">自定义 Header</option>
+                            </select>
+                            <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {form.authHeaderMode === 'custom' && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1.5">自定义鉴权 Header 名称</label>
+                          <input
+                            type="text"
+                            value={form.customAuthHeader || ''}
+                            onChange={(e) => updateField('customAuthHeader', e.target.value)}
+                            placeholder="例如：X-Company-Token"
+                            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                          />
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">额外 Headers</label>
+                        <textarea
+                          value={form.customHeaders || ''}
+                          onChange={(e) => updateField('customHeaders', e.target.value)}
+                          placeholder={'每行一个 Header，例如：\nX-User-ID: teacher-a\nX-Workspace: docmind'}
+                          rows={3}
+                          className="w-full resize-y rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Conditional: Local Endpoint */}
               {form.providerMode === 'local' && (
                 <div>
@@ -572,6 +690,7 @@ export default function SettingsPage() {
                   {isCreating ? '保存并应用' : '应用此配置'}
                 </button>
                 <TestConnectionButton config={form} />
+                {form.providerMode === 'third-party' && <DiagnoseConnectionButton config={form} />}
               </div>
             </div>
           </div>
