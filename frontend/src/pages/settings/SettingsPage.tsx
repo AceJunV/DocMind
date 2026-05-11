@@ -58,13 +58,13 @@ function getFormFromProfile(profile: SavedModelProfile): FormValues {
   }
 }
 
-function TestConnectionButton() {
+function TestConnectionButton({ config }: { config: ModelConfig }) {
   const [testing, setTesting] = useState(false)
   return (
     <button
       onClick={async () => {
         setTesting(true)
-        const result = await testConnection()
+        const result = await testConnection(config)
         setTesting(false)
         if (result.ok) {
           globalToast('success', `${result.message} 模型: ${result.model || ''}`)
@@ -445,10 +445,14 @@ export default function SettingsPage() {
                     ) : (
                       <>
                         <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0 text-[10px] font-medium text-amber-700 mr-1.5">
-                          未识别模型
+                          自定义模型
                         </span>
                         <span className="text-xs">{form.model.trim()}</span>
-                        <p className="text-xs mt-1 opacity-80">当前模型不在已知列表中。官方模式会按前缀推断接口地址。</p>
+                        <p className="text-xs mt-1 opacity-80">
+                          {form.providerMode === 'third-party'
+                            ? '第三方兼容模式会按中转站返回结果校验，不要求模型在内置列表中。'
+                            : '当前模型不在已知列表中。官方模式会按前缀推断接口地址。'}
+                        </p>
                       </>
                     )}
                   </div>
@@ -567,7 +571,7 @@ export default function SettingsPage() {
                   <Zap className="h-4 w-4" />
                   {isCreating ? '保存并应用' : '应用此配置'}
                 </button>
-                <TestConnectionButton />
+                <TestConnectionButton config={form} />
               </div>
             </div>
           </div>

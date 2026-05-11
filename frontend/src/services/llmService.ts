@@ -1,4 +1,5 @@
 import { useSettingsStore, resolveModelConfig, isModelConfigValid } from '@/stores/settingsStore'
+import type { ModelConfig } from '@/types'
 import { getRetryDelayMs, sleepWithSignal } from '@/utils/retry'
 
 export class LLMError extends Error {
@@ -70,13 +71,31 @@ interface StreamCallbacks {
 const RETRYABLE_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504])
 const MAX_REQUEST_ATTEMPTS = 3
 
-function getConfig() {
-  const config = useSettingsStore.getState().currentConfig
+function getConfig(configOverride?: Partial<ModelConfig>) {
+  const config = configOverride ?? useSettingsStore.getState().currentConfig
   if (!config || !isModelConfigValid(config)) {
     throw new LLMError(getLlmErrorUserMessage('no_config'), 'no_config')
   }
 
   return resolveModelConfig(config)
+}
+
+export function buildChatCompletionsUrl(baseUrl: string) {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '')
+  if (!trimmed) return '/chat/completions'
+  if (/\/chat\/completions$/i.test(trimmed)) return trimmed
+
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.pathname === '' || parsed.pathname === '/') {
+      parsed.pathname = '/v1'
+      return `${parsed.toString().replace(/\/+$/, '')}/chat/completions`
+    }
+  } catch {
+    // Relative or non-standard URLs are still supported by appending the endpoint.
+  }
+
+  return `${trimmed}/chat/completions`
 }
 
 async function readErrorDetail(response: Response) {
@@ -94,7 +113,7 @@ export async function chatCompletion(
   signal?: AbortSignal,
 ): Promise<void> {
   const config = getConfig()
-  const url = `${config.baseUrl}/chat/completions`
+  const url = buildChatCompletionsUrl(config.baseUrl)
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${config.apiKey}`,
@@ -288,10 +307,10 @@ export async function continuePrompt(
   return result || currentText
 }
 
-export async function testConnection(): Promise<{ ok: boolean; message: string; model?: string }> {
+export async function testConnection(configOverride?: Partial<ModelConfig>): Promise<{ ok: boolean; message: string; model?: string }> {
   try {
-    const config = getConfig()
-    const url = `${config.baseUrl}/chat/completions`
+    const config = getConfig(configOverride)
+    const url = buildChatCompletionsUrl(config.baseUrl)
     const res = await fetch(url, {
       method: 'POST',
       headers: {
