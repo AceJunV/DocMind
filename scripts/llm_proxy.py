@@ -11,6 +11,8 @@ from urllib.parse import urlparse
 
 MAX_BODY_BYTES = 2 * 1024 * 1024
 TIMEOUT_SECONDS = 90
+MIN_TIMEOUT_SECONDS = 5
+MAX_TIMEOUT_SECONDS = 90
 HOP_BY_HOP_HEADERS = {
     "connection",
     "keep-alive",
@@ -77,6 +79,7 @@ class LlmProxyHandler(BaseHTTPRequestHandler):
             payload = request_body.get("payload")
             if not api_key or not isinstance(payload, dict):
                 raise ValueError("apiKey and payload are required")
+            timeout_seconds = self._read_timeout_seconds(request_body.get("timeoutSeconds"))
         except ValueError as exc:
             self._send_json(400, {"error": str(exc)})
             return
@@ -88,35 +91,65 @@ class LlmProxyHandler(BaseHTTPRequestHandler):
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {api_key}",
+                "Accept": "application/json, text/event-stream",
+                "User-Agent": "DocMind-LLM-Proxy/1.0",
             },
         )
 
         try:
-            with urllib.request.urlopen(outbound, timeout=TIMEOUT_SECONDS) as response:
+            with urllib.request.urlopen(outbound, timeout=timeout_seconds) as response:
                 self.send_response(response.status)
-                for key, value in response.headers.items():
-                    if key.lower() in HOP_BY_HOP_HEADERS:
-                        continue
-                    self.send_header(key, value)
-                self.end_headers()
-                while True:
-                    chunk = response.read(8192)
-                    if not chunk:
-                        break
-                    self.wfile.write(chunk)
-                    self.wfile.flush()
+                is_stream = payload.get("stream") is True
+                if is_stream:
+                    for key, value in response.headers.items():
+                        if key.lower() in HOP_BY_HOP_HEADERS or key.lower() == "content-length":
+                            continue
+                        self.send_header(key, value)
+                    self.send_header("Connection", "close")
+                    self.end_headers()
+                    while True:
+                        chunk = response.read(8192)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+                    self.close_connection = True
+                else:
+                    body = response.read()
+                    for key, value in response.headers.items():
+                        if key.lower() in HOP_BY_HOP_HEADERS or key.lower() == "content-length":
+                            continue
+                        self.send_header(key, value)
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Connection", "close")
+                    self.end_headers()
+                    self.wfile.write(body)
+                    self.close_connection = True
         except urllib.error.HTTPError as exc:
             self.send_response(exc.code)
             for key, value in exc.headers.items():
-                if key.lower() in HOP_BY_HOP_HEADERS:
+                if key.lower() in HOP_BY_HOP_HEADERS or key.lower() == "content-length":
                     continue
                 self.send_header(key, value)
             body = exc.read()
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(body)
+            self.close_connection = True
+        except (TimeoutError, socket.timeout):
+            self._send_json(504, {"error": f"upstream request timed out after {timeout_seconds}s"})
+        except urllib.error.URLError as exc:
+            reason = getattr(exc, "reason", None)
+            if isinstance(reason, (TimeoutError, socket.timeout)):
+                self._send_json(504, {"error": f"upstream request timed out after {timeout_seconds}s"})
+                return
+
+            message = str(reason or exc) or exc.__class__.__name__
+            self._send_json(502, {"error": f"upstream request failed: {message}"})
         except Exception as exc:
-            self._send_json(502, {"error": f"upstream request failed: {exc}"})
+            message = str(exc) or exc.__class__.__name__
+            self._send_json(502, {"error": f"upstream request failed: {message}"})
 
     def _read_json_body(self) -> dict:
         try:
@@ -135,13 +168,24 @@ class LlmProxyHandler(BaseHTTPRequestHandler):
             raise ValueError("json body must be an object")
         return data
 
+    def _read_timeout_seconds(self, value: object) -> int:
+        if value is None:
+            return TIMEOUT_SECONDS
+        try:
+            timeout_seconds = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("timeoutSeconds must be a number") from exc
+        return max(MIN_TIMEOUT_SECONDS, min(MAX_TIMEOUT_SECONDS, timeout_seconds))
+
     def _send_json(self, status: int, payload: dict) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(body)
+        self.close_connection = True
 
     def log_message(self, fmt: str, *args: object) -> None:
         print(f"{self.address_string()} - {fmt % args}", flush=True)

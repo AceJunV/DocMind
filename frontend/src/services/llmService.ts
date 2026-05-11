@@ -70,6 +70,7 @@ interface StreamCallbacks {
 
 const RETRYABLE_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504])
 const MAX_REQUEST_ATTEMPTS = 3
+const TEST_CONNECTION_TIMEOUT_MS = 20_000
 const LLM_PROXY_ENDPOINT = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/llm-proxy/chat/completions`
 
 function getConfig(configOverride?: Partial<ModelConfig>) {
@@ -118,6 +119,7 @@ function buildLlmFetchRequest(config: ModelConfig, payload: Record<string, unkno
         targetUrl,
         apiKey: config.apiKey,
         payload,
+        timeoutSeconds: payload.stream === true ? 90 : 20,
       }),
     }
   }
@@ -139,6 +141,21 @@ async function readErrorDetail(response: Response) {
   } catch {
     return await response.text().catch(() => '')
   }
+}
+
+function getResponseErrorDetail(body: unknown) {
+  if (!body || typeof body !== 'object') return '未知错误'
+  const record = body as Record<string, unknown>
+  const error = record.error
+  if (typeof error === 'string') return error
+  if (error && typeof error === 'object') {
+    const errorRecord = error as Record<string, unknown>
+    if (typeof errorRecord.message === 'string') return errorRecord.message
+    return JSON.stringify(errorRecord)
+  }
+  if (typeof record.msg === 'string') return record.msg
+  if (typeof record.message === 'string') return record.message
+  return JSON.stringify(record)
 }
 
 export async function chatCompletion(
@@ -338,6 +355,9 @@ export async function continuePrompt(
 }
 
 export async function testConnection(configOverride?: Partial<ModelConfig>): Promise<{ ok: boolean; message: string; model?: string }> {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), TEST_CONNECTION_TIMEOUT_MS)
+
   try {
     const config = getConfig(configOverride)
     const request = buildLlmFetchRequest(config, {
@@ -349,13 +369,14 @@ export async function testConnection(configOverride?: Partial<ModelConfig>): Pro
       method: 'POST',
       headers: request.headers,
       body: request.body,
+      signal: controller.signal,
     })
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
       return {
         ok: false,
-        message: `API 返回 ${res.status}: ${(body as Record<string, unknown>).error || '未知错误'}`,
+        message: `API 返回 ${res.status}: ${getResponseErrorDetail(body)}`,
       }
     }
 
@@ -366,10 +387,16 @@ export async function testConnection(configOverride?: Partial<ModelConfig>): Pro
       model: body.model || config.model,
     }
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return { ok: false, message: '测试连接超时：中转站或代理在 20 秒内没有返回，请检查 Base URL、模型名或稍后重试。' }
+    }
+
     if (error instanceof LLMError) {
       return { ok: false, message: error.message }
     }
 
     return { ok: false, message: '网络连接失败' }
+  } finally {
+    window.clearTimeout(timeoutId)
   }
 }
