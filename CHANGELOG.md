@@ -110,9 +110,11 @@
 
 ```
 VPS 123.207.2.148 (Nginx)
-├── /              → /var/www/user_web          ← 主版本 (master, 端口 80)
-└── /teaching/     → /var/www/user_web_teaching ← 教研版 (feature/teaching-research, 端口 80)
+├── /              → /var/www/gongju_portal     ← 门户 Gongju_Index
+└── /teaching/     → /var/www/user_web_teaching ← DocMind 教研版 (teaching 分支)
 ```
+
+> 注意：早期 `/var/www/user_web` 根站点方案已废弃。DocMind 不再占用 `/`，只允许部署到 `/teaching/`。
 
 ### 文件变更统计
 
@@ -124,7 +126,7 @@ VPS 123.207.2.148 (Nginx)
 ## v0.2.0 — 综合优化与交互重构 (2026-04-20)
 
 **分支**: `master`
-**部署**: `http://123.207.2.148/`
+**历史部署**: `http://123.207.2.148/`（已废弃，当前根路径归 Gongju_Index 门户）
 
 - Agent 模板列表按职能分组展示（技术研发/产品设计/管理决策/专业服务）
 - TypeScript 构建错误修复

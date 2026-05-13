@@ -307,12 +307,13 @@ Agent (N) ←─────→ (N) ChatRoom   (多对多，通过 ChatParticipa
 ```
 VPS 123.207.2.148（Nginx 同端口路径分发）
 │
-├── /              → /var/www/user_web          ← 主版本 (master)
-│                    Vite build, base: /
+├── /              → /var/www/gongju_portal     ← AI 课件工具箱门户 (Gongju_Index)
 │
-└── /teaching/     → /var/www/user_web_teaching ← 教研版 (feature/teaching-research)
+└── /teaching/     → /var/www/user_web_teaching ← DocMind 教研版 (teaching 分支)
                      Vite build, base: /teaching/
 ```
+
+> 注意：早期 `/var/www/user_web` 根站点方案已废弃。DocMind 不再占用 `/`，只允许部署到 `/teaching/`。详细规则见项目根目录 `DEPLOYMENT.md`。
 
 ### 5.5 数据实体扩展
 
