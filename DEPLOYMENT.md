@@ -54,7 +54,7 @@ sudo chown -R www-data:www-data /var/www/user_web_teaching
 sudo chmod -R a+rX /var/www/user_web_teaching
 ```
 
-nginx 只应使用 `/teaching/` location：
+nginx 只应使用 `/teaching/` 相关 location。LLM 代理接口必须在通用 `/teaching/` 静态回退之前声明，否则浏览器 POST 到 `/teaching/api/llm-proxy/chat/completions` 会被静态站点 location 拦截并返回 `405 Not Allowed`：
 
 ```nginx
 location = /teaching {
@@ -70,6 +70,18 @@ location ^~ /teaching/assets/ {
     alias /var/www/user_web_teaching/assets/;
     expires 30d;
     add_header Cache-Control "public, immutable" always;
+}
+
+location = /teaching/api/llm-proxy/chat/completions {
+    proxy_pass http://127.0.0.1:18080/chat/completions;
+    proxy_http_version 1.1;
+    proxy_buffering off;
+    proxy_read_timeout 120s;
+    proxy_send_timeout 120s;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
 }
 
 location ^~ /teaching/ {
@@ -91,12 +103,14 @@ sudo systemctl reload nginx
 curl -I http://123.207.2.148/teaching
 curl -I http://123.207.2.148/teaching/
 curl -I http://123.207.2.148/teaching/assets/
+curl -i -X OPTIONS http://123.207.2.148/teaching/api/llm-proxy/chat/completions
 ```
 
 期望：
 
 - `/teaching` 返回 `301 /teaching/`
 - `/teaching/` 返回 `200 OK`
+- `/teaching/api/llm-proxy/chat/completions` 的 `OPTIONS` 返回 `204 No Content`
 - 浏览器控制台不能出现 basename `/teaching` 与 URL `/` 不匹配的错误
 
 ## 和门户的关系
