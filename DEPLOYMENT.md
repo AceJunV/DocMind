@@ -14,6 +14,17 @@ DocMind 只作为 AI 课件工具箱门户下的子工具运行。
 | 前端构建 base | `frontend/vite.config.ts` 中必须为 `base: '/teaching/'` |
 | 门户根路径 | `http://123.207.2.148/`，归属 Gongju_Index |
 
+## 私密登录信息
+
+服务器登录信息只允许写入仓库根目录的 `DEPLOYMENT.local.md`。该文件已加入 `.gitignore`，禁止提交或推送。
+
+`DEPLOYMENT.local.md` 必须包含：
+
+- 服务器地址
+- 登录用户名
+- 登录密码
+- SSH 登录命令
+
 ## 绝对禁止
 
 - 不要把 DocMind 部署到 `/`。

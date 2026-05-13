@@ -44,5 +44,8 @@ frontend/test-results/
 # Deploy scripts (contain credentials)
 deploy*.py
 
+# Local deployment credentials, never commit
+DEPLOYMENT.local.md
+
 # Vercel
 .vercel/
