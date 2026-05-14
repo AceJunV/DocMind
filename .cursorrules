@@ -1,0 +1,18 @@
+# Cursor Rules
+# 此文件从 RULES.md 自动生成，请勿手动修改。
+
+# 核心规则请参阅项目根目录的 RULES.md。
+
+# 关键约束：
+# 1. 只修改当前 Issue 所属模块的目录
+# 2. 禁止直接 push 到 main
+# 3. 禁止引入新的 npm 依赖
+# 4. 禁止修改共享层文件（除非 Issue 明确要求）
+# 5. commit 格式：<type>: <描述>
+
+# 工作流脚本：
+# - 查看任务: bash scripts/workflow/wf-tasks.sh
+# - 开始任务: bash scripts/workflow/wf-start.sh <issue_number>
+# - 提交审查: bash scripts/workflow/wf-submit.sh
+# - 查看状态: bash scripts/workflow/wf-status.sh
+# - 同步main: bash scripts/workflow/wf-sync.sh

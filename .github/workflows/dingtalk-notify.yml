@@ -1,0 +1,92 @@
+name: DingTalk Notification
+
+on:
+  issues:
+    types: [assigned]
+  pull_request:
+    types: [opened, closed]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Issue Assigned
+        if: github.event_name == 'issues' && github.event.action == 'assigned'
+        env:
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+        run: |
+          ASSIGNEE="${{ github.event.assignee.login }}"
+          TITLE="${{ github.event.issue.title }}"
+          NUMBER="${{ github.event.issue.number }}"
+          URL="${{ github.event.issue.html_url }}"
+
+          curl -s "$DINGTALK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"msgtype\": \"markdown\",
+              \"markdown\": {
+                \"title\": \"📋 新任务指派\",
+                \"text\": \"## 📋 新任务指派\n\n**@${ASSIGNEE}** 你有新任务：\n\n**#${NUMBER}** ${TITLE}\n\n[查看详情](${URL})\"
+              }
+            }"
+
+      - name: PR Created
+        if: github.event_name == 'pull_request' && github.event.action == 'opened'
+        env:
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+        run: |
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+          TITLE="${{ github.event.pull_request.title }}"
+          NUMBER="${{ github.event.pull_request.number }}"
+          URL="${{ github.event.pull_request.html_url }}"
+
+          curl -s "$DINGTALK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"msgtype\": \"markdown\",
+              \"markdown\": {
+                \"title\": \"🔀 新 PR 待审批\",
+                \"text\": \"## 🔀 新 PR 待审批\n\n**${AUTHOR}** 提交了 PR：\n\n**#${NUMBER}** ${TITLE}\n\n[去审批](${URL})\"
+              }
+            }"
+
+      - name: PR Merged
+        if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+        env:
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+        run: |
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+          TITLE="${{ github.event.pull_request.title }}"
+          NUMBER="${{ github.event.pull_request.number }}"
+
+          curl -s "$DINGTALK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"msgtype\": \"markdown\",
+              \"markdown\": {
+                \"title\": \"✅ PR 已合并\",
+                \"text\": \"## ✅ PR 已合并\n\n**${AUTHOR}** 的 PR **#${NUMBER}** ${TITLE} 已合并\"
+              }
+            }"
+
+      - name: PR Review - Changes Requested
+        if: github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested'
+        env:
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+        run: |
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          TITLE="${{ github.event.pull_request.title }}"
+          NUMBER="${{ github.event.pull_request.number }}"
+          URL="${{ github.event.pull_request.html_url }}"
+
+          curl -s "$DINGTALK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"msgtype\": \"markdown\",
+              \"markdown\": {
+                \"title\": \"🔴 PR 被打回\",
+                \"text\": \"## 🔴 PR 被打回\n\n**@${PR_AUTHOR}** 你的 PR 需要修改：\n\n**#${NUMBER}** ${TITLE}\n\n[查看打回原因](${URL})\"
+              }
+            }"

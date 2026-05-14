@@ -1,0 +1,8 @@
+# 共享层文件需要管理者审批
+# 此文件由 deploy_workflow.py 自动生成
+
+/frontend/src/components/ui/ @owner
+/frontend/src/components/layout/ @owner
+/frontend/src/lib/ @owner
+/frontend/src/utils/ @owner
+/frontend/src/types/ @owner

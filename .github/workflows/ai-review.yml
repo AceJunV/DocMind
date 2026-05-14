@@ -1,0 +1,137 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR diff
+        id: diff
+        run: |
+          git fetch origin main
+          DIFF=$(git diff origin/main..HEAD)
+          # 写入文件避免命令行长度限制
+          echo "$DIFF" > /tmp/pr_diff.txt
+          echo "diff_file=/tmp/pr_diff.txt" >> $GITHUB_OUTPUT
+
+      - name: Get changed files list
+        id: files
+        run: |
+          FILES=$(git diff --name-only origin/main..HEAD)
+          echo "$FILES" > /tmp/changed_files.txt
+          echo "files_list=/tmp/changed_files.txt" >> $GITHUB_OUTPUT
+
+      - name: AI Review with Claude Sonnet
+        id: review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          DIFF=$(cat /tmp/pr_diff.txt)
+          FILES=$(cat /tmp/changed_files.txt)
+
+          # 构建审查 prompt
+          PROMPT=$(cat <<'PROMPT_END'
+          你是一个代码审查 AI。请审查以下 PR 的代码变更。
+
+          ## 审查维度
+          1. **规范符合性**：是否符合 RULES.md 中的编码规范
+          2. **边界保护**：是否修改了不属于 Issue 所属模块的文件
+          3. **代码逻辑质量**：逻辑是否合理，有无明显 bug
+          4. **安全检查**：是否引入新依赖、是否包含敏感信息、是否删除关键文件
+          5. **变更影响范围**：修改文件数、影响模块数、是否涉及共享层
+
+          ## 输出格式
+          请输出以下格式的审查结果：
+
+          ### 审查结果：[✅ 通过 / ⚠️ 警告 / 🔴 阻断]
+
+          **变更摘要：**（1-3句话概括改了什么）
+
+          **涉及模块：**（列出涉及的模块）
+
+          **检查项：**
+          - [ ] 规范符合性：通过/问题描述
+          - [ ] 边界保护：通过/越界描述
+          - [ ] 代码逻辑：通过/问题描述
+          - [ ] 安全检查：通过/问题描述
+          - [ ] 共享层影响：无/有（详述）
+
+          **详细说明：**（如有问题，具体说明位置和建议修改方式）
+
+          ## 变更的文件
+          PROMPT_END
+          )
+
+          # 调用 Claude API
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$(jq -n \
+              --arg prompt "$PROMPT" \
+              --arg files "$FILES" \
+              --arg diff "$(head -c 30000 /tmp/pr_diff.txt)" \
+              '{
+                model: "claude-sonnet-4-6",
+                max_tokens: 2000,
+                messages: [{
+                  role: "user",
+                  content: ($prompt + "\n" + $files + "\n\n## Diff\n" + $diff)
+                }]
+              }'
+            )")
+
+          # 提取审查内容
+          REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // "审查请求失败，请人工审查"')
+          echo "$REVIEW" > /tmp/review_result.txt
+
+      - name: Post review comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const review = fs.readFileSync('/tmp/review_result.txt', 'utf8');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## 🤖 AI 代码审查\n\n${review}\n\n---\n*由 Claude Sonnet 自动审查*`
+            });
+
+            // 如果审查结果包含阻断或警告，添加标签
+            if (review.includes('🔴 阻断')) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['review:blocked']
+              });
+            } else if (review.includes('⚠️ 警告')) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['review:warning']
+              });
+            } else {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['review:passed']
+              });
+            }
