@@ -114,7 +114,7 @@
 ## 3. 目录结构
 
 ```
-User_web/
+DocMind/
 ├── frontend/                    # 前端项目
 │   ├── public/
 │   ├── src/
