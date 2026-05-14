@@ -111,10 +111,10 @@
 ```
 VPS 123.207.2.148 (Nginx)
 ├── /              → /var/www/gongju_portal     ← 门户 Gongju_Index
-└── /teaching/     → /var/www/user_web_teaching ← DocMind 教研版 (teaching 分支)
+└── /teaching/     → /var/www/docmind_teaching ← DocMind 教研版 (teaching 分支)
 ```
 
-> 注意：早期 `/var/www/user_web` 根站点方案已废弃。DocMind 不再占用 `/`，只允许部署到 `/teaching/`。
+> 注意：早期 `/var/www/docmind` 根站点方案已废弃。DocMind 不再占用 `/`，只允许部署到 `/teaching/`。
 
 ### 文件变更统计
 
