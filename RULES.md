@@ -73,7 +73,7 @@ type 可选值：feat / fix / improve / refactor / style / docs / chore
 
 ### Issue 标签（必须使用中文）
 
-所有 Issue 必须带以下状态标签之一：
+#### 状态标签（必选，每个 Issue 有且仅有一个）
 
 - `待开发` — Issue 已创建，等待开始
 - `开发中` — 正在开发（运行 wf-start.sh 后自动添加）
@@ -81,7 +81,16 @@ type 可选值：feat / fix / improve / refactor / style / docs / chore
 - `需修改` — AI 检测失败，需要修复
 - `已完成` — PR 已合并
 
-**禁止使用英文标签**（如 todo、in-progress、done 等）。
+**禁止使用英文状态标签**（如 todo、in-progress、done 等）。
+
+#### 优先级标签（可选）
+
+- `P0` — 紧急且重要，立即处理（线上故障、阻塞发布）
+- `P1` — 重要，本周必须完成
+- `P2` — 正常优先级，按计划完成
+- `P3` — 低优先级，有空再做
+
+优先级标签可与状态标签同时存在，如 `待开发` + `P1`。
 
 ### 工作规范
 
