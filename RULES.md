@@ -71,6 +71,20 @@ type 可选值：feat / fix / improve / refactor / style / docs / chore
 
 ## 四、Issue 工作规范
 
+### Issue 标签（必须使用中文）
+
+所有 Issue 必须带以下状态标签之一：
+
+- `待开发` — Issue 已创建，等待开始
+- `开发中` — 正在开发（运行 wf-start.sh 后自动添加）
+- `待审查` — PR 已提交，等待 AI 检测
+- `需修改` — AI 检测失败，需要修复
+- `已完成` — PR 已合并
+
+**禁止使用英文标签**（如 todo、in-progress、done 等）。
+
+### 工作规范
+
 1. **只做指派给你的 Issue**，不要自己领取未指派的任务
 2. **一次只做一个 Issue**（等合并后再做下一个，或做不同模块的）
 3. **一个 Issue = 一个分支 = 一个 PR**，不要在一个分支上做多个 Issue
