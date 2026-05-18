@@ -69,7 +69,7 @@ fi
 
 if [ -n "$SHARED_FILES" ]; then
   echo -e "  涉及共享层文件：${SHARED_FILES}"
-  echo "  ⚠️ 共享层修改将标记为警告，需要管理者审批"
+  echo "  ⚠️ 共享层修改将触发加强 AI 审查"
 fi
 echo "  ✅ 边界检测完成"
 
@@ -148,7 +148,7 @@ ${MODULE_LABEL:-未检测到模块标签}
 - [ ] 未修改其他模块的文件"
 
 # 添加警告标签
-PR_LABELS="status:待审查"
+PR_LABELS="待审查"
 if [ -n "$SHARED_FILES" ]; then
   PR_LABELS="${PR_LABELS},review:warning"
 fi
@@ -163,7 +163,7 @@ PR_URL=$(gh pr create \
   2>&1)
 
 # 10. 更新 Issue 状态
-gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --remove-label "status:开发中" --add-label "status:待审查" 2>/dev/null || true
+gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --remove-label "开发中" --add-label "待审查" 2>/dev/null || true
 
 echo ""
 echo "✅ PR 已创建！"
@@ -172,4 +172,4 @@ echo ""
 echo "📌 接下来请："
 echo "  1. 打开 PR 链接，补充效果截图（前端改动）或确认变更描述"
 echo "  2. 补充一句话说明「为什么做这个改动」"
-echo "  3. 等待管理者审批"
+echo "  3. 等待 AI 自动检测（通过后自动合并，无需管理员审批）"

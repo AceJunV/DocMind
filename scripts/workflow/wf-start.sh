@@ -55,7 +55,7 @@ git fetch origin main
 git checkout -b "$BRANCH_NAME" origin/main
 
 # 7. 更新 Issue 状态为开发中
-gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --remove-label "status:待开发" --add-label "status:开发中" 2>/dev/null || true
+gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --remove-label "待开发" --add-label "开发中" 2>/dev/null || true
 
 echo ""
 echo "✅ 任务开始！"

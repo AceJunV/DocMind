@@ -12,19 +12,19 @@ echo "================================"
 
 echo ""
 echo "🔴 开发中："
-gh issue list --repo "$REPO" --assignee "$CURRENT_USER" --label "status:开发中" --json number,title,labels --jq '.[] | "  #\(.number) \(.title)"'
+gh issue list --repo "$REPO" --assignee "$CURRENT_USER" --label "开发中" --json number,title,labels --jq '.[] | "  #\(.number) \(.title)"'
 
 echo ""
 echo "🟡 待开发："
-gh issue list --repo "$REPO" --assignee "$CURRENT_USER" --label "status:待开发" --json number,title,labels --jq '.[] | "  #\(.number) \(.title)"'
+gh issue list --repo "$REPO" --assignee "$CURRENT_USER" --label "待开发" --json number,title,labels --jq '.[] | "  #\(.number) \(.title)"'
 
 echo ""
 echo "🔵 待审查（PR 已提交）："
-gh issue list --repo "$REPO" --assignee "$CURRENT_USER" --label "status:待审查" --json number,title,labels --jq '.[] | "  #\(.number) \(.title)"'
+gh issue list --repo "$REPO" --assignee "$CURRENT_USER" --label "待审查" --json number,title,labels --jq '.[] | "  #\(.number) \(.title)"'
 
 echo ""
 echo "🟠 需修改（PR 被打回）："
-gh issue list --repo "$REPO" --assignee "$CURRENT_USER" --label "status:需修改" --json number,title,labels --jq '.[] | "  #\(.number) \(.title)"'
+gh issue list --repo "$REPO" --assignee "$CURRENT_USER" --label "需修改" --json number,title,labels --jq '.[] | "  #\(.number) \(.title)"'
 
 echo ""
 echo "================================"
