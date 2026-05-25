@@ -90,6 +90,18 @@ location ^~ /teaching/ {
 }
 ```
 
+AgentHub 等第三方 LLM 中转站不要从浏览器直连。公网前端必须请求同源
+`/teaching/api/llm-proxy/chat/completions`，由 `docmind-llm-proxy.service`
+转发到模型网关，避免第三方网关没有 CORS 预检支持导致浏览器卡住。
+AgentHub 推荐配置：
+
+```text
+Provider 模式：第三方兼容
+模型名称：gpt-5.4-mini
+Base URL：https://agenthub-llm.vipthink.cn/v1
+鉴权：Authorization: Bearer
+```
+
 修改 nginx 后必须执行：
 
 ```bash
