@@ -14,6 +14,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      '/teaching/api/llm-proxy': {
+        target: 'http://127.0.0.1:18080',
+        changeOrigin: true,
+        rewrite: (requestPath) => requestPath.replace(/^\/teaching\/api\/llm-proxy/, ''),
+      },
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
