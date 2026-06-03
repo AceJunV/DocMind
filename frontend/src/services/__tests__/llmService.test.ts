@@ -26,6 +26,11 @@ describe('buildChatCompletionsUrl', () => {
     expect(buildChatCompletionsUrl('https://api.aipaibox.com/v1')).toBe('https://api.aipaibox.com/v1/chat/completions')
     expect(buildChatCompletionsUrl('https://api.aipaibox.com/v1/chat/completions')).toBe('https://api.aipaibox.com/v1/chat/completions')
   })
+
+  it('uses the current official deepseek chat completions path', () => {
+    expect(buildChatCompletionsUrl('https://api.deepseek.com')).toBe('https://api.deepseek.com/chat/completions')
+    expect(buildChatCompletionsUrl('https://api.deepseek.com/')).toBe('https://api.deepseek.com/chat/completions')
+  })
 })
 
 describe('buildChatCompletionsCandidates', () => {

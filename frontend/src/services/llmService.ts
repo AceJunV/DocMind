@@ -90,6 +90,9 @@ export function buildChatCompletionsUrl(baseUrl: string) {
   try {
     const parsed = new URL(trimmed)
     if (parsed.pathname === '' || parsed.pathname === '/') {
+      if (parsed.hostname === 'api.deepseek.com') {
+        return `${parsed.toString().replace(/\/+$/, '')}/chat/completions`
+      }
       parsed.pathname = '/v1'
       return `${parsed.toString().replace(/\/+$/, '')}/chat/completions`
     }

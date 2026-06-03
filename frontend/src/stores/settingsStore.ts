@@ -30,7 +30,7 @@ const OFFICIAL_BASE_URLS: Record<string, string> = {
   // Google Gemini
   'gemini': 'https://generativelanguage.googleapis.com/v1beta',
   // DeepSeek
-  'deepseek': 'https://api.deepseek.com/v1',
+  'deepseek': 'https://api.deepseek.com',
   // Alibaba / Qwen
   'qwen': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   'qwq': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
@@ -191,6 +191,8 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
   { id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', vendor: 'Google', capability: 'multimodal' },
   { id: 'gemini-2.0-flash', displayName: 'Gemini 2.0 Flash', vendor: 'Google', capability: 'multimodal' },
   // ── DeepSeek ──
+  { id: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', vendor: 'DeepSeek', capability: 'text-only' },
+  { id: 'deepseek-v4-pro', displayName: 'DeepSeek V4 Pro', vendor: 'DeepSeek', capability: 'text-only' },
   { id: 'deepseek-chat', displayName: 'DeepSeek Chat (V3.2)', vendor: 'DeepSeek', capability: 'text-only' },
   { id: 'deepseek-reasoner', displayName: 'DeepSeek Reasoner (R1)', vendor: 'DeepSeek', capability: 'text-only' },
   // ── Alibaba / Qwen ──
