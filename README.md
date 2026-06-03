@@ -17,15 +17,35 @@
 # 安装前端依赖
 cd frontend
 npm install
-
-# 启动开发服务器
-npm run dev
-
-# 生产构建
-npm run build
 ```
 
-访问 http://localhost:5173 即可使用。
+本地测试需要同时启动两个服务，否则 AI Key 测试、评审和聊天会因为缺少 LLM 中转服务而返回 `502 Bad Gateway`。
+
+```bash
+# 终端 1：在项目根目录启动 LLM 中转服务
+python3 scripts/llm_proxy.py
+```
+
+```bash
+# 终端 2：启动前端开发服务器
+cd frontend
+npm run dev
+```
+
+访问 Vite 输出的 `/teaching/` 地址即可使用，例如：
+
+```text
+http://localhost:5173/teaching/
+```
+
+如果 `5173` 被占用，Vite 会自动换到 `5174` 等其他端口，请以终端输出为准。
+
+生产构建：
+
+```bash
+cd frontend
+npm run build
+```
 
 ## 前端页面
 

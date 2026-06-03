@@ -1,5 +1,24 @@
 # AGENTS.md — DocMind
 
+## 本地启动规则
+
+本地测试 DocMind 时，不要只启动前端开发服务器。AI Key 测试、评审、聊天等模型调用都依赖本项目根目录的 LLM 中转脚本。
+
+需要同时启动两个进程：
+
+```bash
+# 终端 1：启动 LLM 中转服务
+python3 scripts/llm_proxy.py
+```
+
+```bash
+# 终端 2：启动前端页面
+cd frontend
+npm run dev
+```
+
+前端会把 `/teaching/api/llm-proxy/chat/completions` 转发到 `http://127.0.0.1:18080/chat/completions`。如果没有启动 `scripts/llm_proxy.py`，测试连接和模型调用会返回 `502 Bad Gateway`。
+
 ## 部署红线
 
 部署前必须先读本项目根目录的 `DEPLOYMENT.md`。
