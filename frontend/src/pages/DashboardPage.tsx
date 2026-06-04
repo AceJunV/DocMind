@@ -1,10 +1,12 @@
-import { Link } from 'react-router-dom'
+import { useState, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
-  ArrowRight,
   Bot,
   ClipboardCheck,
   Clock3,
+  CloudUpload,
   FileText,
+  Loader2,
   MessageCircle,
   Sparkles,
   Star,
@@ -22,40 +24,14 @@ import { useReviewStore } from '@/stores/reviewStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useActivityStore, type Activity } from '@/stores/activityStore'
 import { formatTimeAgo } from '@/utils/format'
+import { parseDocument, createDocumentFromFile, SUPPORTED_EXTENSIONS, MAX_FILE_SIZE } from '@/services/documentParser'
+import { toast } from '@/components/ui/Toast'
 
-const QUICK_ACTIONS = [
-  {
-    icon: Upload,
-    label: '上传教研案',
-    description: '支持 PDF、DOC、DOCX、Markdown 和 TXT，上传后会自动解析教学要素。',
-    path: '/documents',
-    badge: '文档入口',
-    tone: 'bg-blue-50 text-blue-600',
-  },
-  {
-    icon: Bot,
-    label: '新增角色',
-    description: '从模板挑选，或创建更适合你学科场景的评审角色。',
-    path: '/agents',
-    badge: '角色配置',
-    tone: 'bg-violet-50 text-violet-600',
-  },
-  {
-    icon: ClipboardCheck,
-    label: '发起评审',
-    description: '多角色并行分析文档，生成共识、争议点与改进建议。',
-    path: '/reviews/create',
-    badge: '核心流程',
-    tone: 'bg-emerald-50 text-emerald-600',
-  },
-  {
-    icon: MessageCircle,
-    label: '进入研讨',
-    description: '围绕文档和评审结论继续讨论，让角色主动推进重点问题。',
-    path: '/chat',
-    badge: '讨论空间',
-    tone: 'bg-amber-50 text-amber-600',
-  },
+const FLOW_STEPS = [
+  { icon: Upload, label: '上传教案', description: '上传 PDF、DOC、DOCX、Markdown 或 TXT 格式的教研案文档' },
+  { icon: Bot, label: '准备评审', description: '选择评审角色，配置不同视角的专业评委' },
+  { icon: ClipboardCheck, label: '发起评审', description: '多角色并行分析，生成共识、争议点与改进建议' },
+  { icon: MessageCircle, label: '进入研讨', description: '围绕评审结论继续讨论，角色主动推进重点问题' },
 ]
 
 const TYPE_DOT: Record<Activity['type'], string> = {
@@ -82,16 +58,22 @@ function getReviewTone(score?: number) {
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate()
   const { user } = useAuthStore()
   const documents = useDocumentStore((state) => state.documents)
+  const addDocument = useDocumentStore((state) => state.addDocument)
+  const updateDocument = useDocumentStore((state) => state.updateDocument)
   const agents = useAgentStore((state) => state.agents)
   const reviews = useReviewStore((state) => state.reviews)
   const rooms = useChatStore((state) => state.rooms)
   const activities = useActivityStore((state) => state.activities)
 
+  const [dragActive, setDragActive] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const completedReviews = reviews.filter((review) => review.status === 'completed')
   const readyDocuments = documents.filter((document) => document.status === 'ready')
-  const activeRooms = rooms.filter((room) => room.status === 'active')
   const recentReviews = completedReviews.slice(0, 5)
   const recentActivities = activities.slice(0, 6)
   const agentRanking = [...agents].sort((left, right) => right.usage_count - left.usage_count).slice(0, 5)
@@ -111,7 +93,7 @@ export default function DashboardPage() {
     },
     {
       label: '活跃研讨',
-      value: activeRooms.length,
+      value: rooms.filter((room) => room.status === 'active').length,
       meta: `${rooms.length} 个聊天室`,
       icon: MessageCircle,
     },
@@ -122,6 +104,88 @@ export default function DashboardPage() {
       icon: Bot,
     },
   ]
+
+  const processFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const fileArray = Array.from(files)
+      if (fileArray.length === 0) return
+
+      const unsupportedFiles: string[] = []
+      const oversizedFiles: string[] = []
+      const validFiles: File[] = []
+
+      for (const file of fileArray) {
+        const ext = `.${file.name.split('.').pop()?.toLowerCase() || ''}`
+        if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+          unsupportedFiles.push(file.name)
+          continue
+        }
+        if (file.size > MAX_FILE_SIZE) {
+          oversizedFiles.push(file.name)
+          continue
+        }
+        validFiles.push(file)
+      }
+
+      if (unsupportedFiles.length > 0) {
+        toast('error', `不支持的文件格式：${unsupportedFiles.join('、')}`)
+      }
+      if (oversizedFiles.length > 0) {
+        toast('error', `文件超过 20MB 限制：${oversizedFiles.join('、')}`)
+      }
+
+      if (validFiles.length === 0) return
+
+      setUploading(true)
+      const parsedDocIds: string[] = []
+      let lastReadyDocId = ''
+      let hasError = false
+
+      for (const file of validFiles) {
+        const doc = createDocumentFromFile(file, user?.id || '')
+        addDocument(doc)
+        parsedDocIds.push(doc.id)
+
+        try {
+          const result = await parseDocument(file)
+          updateDocument(doc.id, {
+            raw_content: result.raw_content,
+            structured_content: result.structured_content,
+            word_count: result.word_count,
+            teaching_plan: result.teaching_plan,
+            status: 'ready',
+          })
+          lastReadyDocId = doc.id
+          toast('success', `《${doc.title}》解析完成`)
+        } catch (error) {
+          hasError = true
+          updateDocument(doc.id, { status: 'error' })
+          toast('error', `《${doc.title}》解析失败：${error instanceof Error ? error.message : '未知错误'}`)
+        }
+      }
+
+      setUploading(false)
+
+      if (lastReadyDocId) {
+        sessionStorage.setItem('dashboard_uploaded_doc_ids', JSON.stringify(parsedDocIds))
+        navigate(`/reviews/create?doc=${lastReadyDocId}&from=dashboard`)
+      } else if (!hasError || parsedDocIds.length === 0) {
+        // no valid files and no navigation needed
+      }
+    },
+    [user, addDocument, updateDocument, navigate],
+  )
+
+  const handleDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault()
+      setDragActive(false)
+      if (event.dataTransfer.files.length > 0) {
+        processFiles(event.dataTransfer.files)
+      }
+    },
+    [processFiles],
+  )
 
   return (
     <div className="space-y-6 animate-slide-up">
@@ -151,34 +215,76 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {QUICK_ACTIONS.map((action) => {
-              const Icon = action.icon
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {FLOW_STEPS.map((step, index) => {
+              const Icon = step.icon
               return (
-                <Link
-                  key={action.label}
-                  to={action.path}
-                  className="dm-panel dm-panel-hover rounded-2xl p-4 no-underline"
-                >
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className={cn('rounded-2xl p-3 shadow-sm', action.tone)}>
+                <div key={step.label} className="flex items-start gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary-100 text-primary-600 shadow-sm">
                       <Icon className="h-5 w-5" />
                     </div>
-                    <Badge variant="default" className="bg-white/80">
-                      {action.badge}
-                    </Badge>
+                    {index < FLOW_STEPS.length - 1 && (
+                      <div className="mt-1 h-2 w-0.5 bg-primary-200" />
+                    )}
                   </div>
-                  <h2 className="text-base font-semibold text-gray-900">{action.label}</h2>
-                  <p className="mt-2 text-xs leading-6 text-gray-500">{action.description}</p>
-                  <div className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary-600">
-                    进入
-                    <ArrowRight className="h-3.5 w-3.5" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-medium text-primary-500">Step {index + 1}</span>
+                    </div>
+                    <h3 className="mt-0.5 text-sm font-semibold text-gray-900">{step.label}</h3>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">{step.description}</p>
                   </div>
-                </Link>
+                </div>
               )
             })}
           </div>
         </div>
+      </section>
+
+      <section className="rounded-[28px] border border-dashed border-gray-300 bg-white px-6 py-8 text-center transition-colors hover:border-primary-300 hover:bg-primary-50/30 sm:px-8"
+        onDragOver={(e) => { e.preventDefault(); setDragActive(true) }}
+        onDragLeave={() => setDragActive(false)}
+        onDrop={handleDrop}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={SUPPORTED_EXTENSIONS.join(',')}
+          className="hidden"
+          onChange={(e) => { if (e.target.files) processFiles(e.target.files); e.target.value = '' }}
+        />
+
+        {uploading ? (
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="h-10 w-10 animate-spin text-primary-500" />
+            <p className="text-sm font-medium text-gray-700">正在解析文档...</p>
+            <p className="text-xs text-gray-500">解析完成后将自动跳转到发起评审页</p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-primary-500">
+              <CloudUpload className="h-7 w-7" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">上传教研案文档</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                拖拽文件到此处，或点击选择文件
+              </p>
+              <p className="mt-1 text-xs text-gray-400">
+                支持 PDF、DOC、DOCX、Markdown、TXT，可多选文件，最大 20MB
+              </p>
+            </div>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-2 inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-700 transition-colors cursor-pointer border-0"
+            >
+              <Upload className="h-4 w-4" />
+              选择文档上传
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
@@ -191,9 +297,6 @@ export default function DashboardPage() {
                 <p className="mt-1 text-xs text-gray-500">哪些角色被最频繁地调用，说明它们更贴近当前研讨需求。</p>
               </div>
             </div>
-            <Link to="/agents" className="text-xs font-medium text-primary-600 no-underline">
-              管理角色
-            </Link>
           </CardHeader>
           <CardContent className="px-0 py-0">
             {agentRanking.length === 0 ? (
@@ -207,10 +310,9 @@ export default function DashboardPage() {
                 {agentRanking.map((agent, index) => {
                   const accent = AGENT_COLORS[agent.color]
                   return (
-                    <Link
+                    <div
                       key={agent.id}
-                      to="/agents"
-                      className="flex items-center gap-3 px-6 py-4 transition-colors hover:bg-gray-50 no-underline"
+                      className="flex items-center gap-3 px-6 py-4 transition-colors hover:bg-gray-50"
                     >
                       <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-500">
                         {index + 1}
@@ -229,7 +331,7 @@ export default function DashboardPage() {
                         <Star className="h-3.5 w-3.5 text-amber-400" />
                         {agent.usage_count} 次
                       </div>
-                    </Link>
+                    </div>
                   )
                 })}
               </div>
@@ -246,9 +348,6 @@ export default function DashboardPage() {
                 <p className="mt-1 text-xs text-gray-500">优先查看刚刚完成的报告，及时把建议转入研讨或修订。</p>
               </div>
             </div>
-            <Link to="/reviews" className="text-xs font-medium text-primary-600 no-underline">
-              查看全部
-            </Link>
           </CardHeader>
           <CardContent className="px-0 py-0">
             {recentReviews.length === 0 ? (
@@ -260,10 +359,10 @@ export default function DashboardPage() {
             ) : (
               <div className="divide-y divide-gray-100">
                 {recentReviews.map((review) => (
-                  <Link
+                  <div
                     key={review.id}
-                    to={`/reviews/${review.id}`}
-                    className="flex items-center gap-3 px-6 py-4 transition-colors hover:bg-gray-50 no-underline"
+                    onClick={() => navigate(`/reviews/${review.id}`)}
+                    className="flex items-center gap-3 px-6 py-4 transition-colors hover:bg-gray-50 cursor-pointer"
                   >
                     <div className="rounded-2xl bg-primary-50 p-2 text-primary-600">
                       <ClipboardCheck className="h-4 w-4" />
@@ -280,7 +379,7 @@ export default function DashboardPage() {
                       ) : null}
                       <span className="text-[11px] text-gray-400">{formatTimeAgo(review.created_at)}</span>
                     </div>
-                  </Link>
+                  </div>
                 ))}
               </div>
             )}

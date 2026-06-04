@@ -1,8 +1,8 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { useDocumentStore } from '@/stores/documentStore'
 import { THEME_OPTIONS, useThemeStore } from '@/stores/themeStore'
 import {
-  FileText,
   Bot,
   ClipboardCheck,
   MessageCircle,
@@ -24,11 +24,10 @@ import { CommandPalette } from '@/components/ui/CommandPalette'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 const NAV_ITEMS = [
-  { path: '/dashboard', label: '工作台', icon: LayoutDashboard },
-  { path: '/documents', label: '教研案', icon: FileText },
-  { path: '/agents', label: '评审团', icon: Bot },
+  { path: '/dashboard', label: '首页', icon: LayoutDashboard },
   { path: '/reviews', label: '评审大厅', icon: ClipboardCheck },
-  { path: '/chat', label: '教研研讨', icon: MessageCircle },
+  { path: '/agents', label: '评审团', icon: Bot },
+  { path: '/chat', label: '研讨室', icon: MessageCircle },
 ]
 
 export function Header() {
@@ -47,6 +46,20 @@ export function Header() {
 
   const openSearch = useCallback(() => setSearchOpen(true), [])
   const closeSearch = useCallback(() => setSearchOpen(false), [])
+
+  const clearPendingDocsIfNeeded = useCallback(() => {
+    const { pendingCleanupDocIds, clearPendingCleanup } = useDocumentStore.getState()
+    if (pendingCleanupDocIds.length > 0) {
+      clearPendingCleanup()
+      sessionStorage.removeItem('dashboard_uploaded_doc_ids')
+    }
+  }, [])
+
+  const handleNavClick = useCallback((e: React.MouseEvent, path: string) => {
+    clearPendingDocsIfNeeded()
+    navigate(path)
+    setMobileNavOpen(false)
+  }, [clearPendingDocsIfNeeded, navigate])
 
   const themeLabel = theme === 'light' ? '亮色模式' : theme === 'dark' ? '暗色模式' : '跟随系统'
   const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor
@@ -81,6 +94,18 @@ export function Header() {
     return () => document.removeEventListener('keydown', handleKey)
   }, [])
 
+  useEffect(() => {
+    function handlePopState() {
+      const { pendingCleanupDocIds, clearPendingCleanup } = useDocumentStore.getState()
+      if (pendingCleanupDocIds.length > 0) {
+        clearPendingCleanup()
+        sessionStorage.removeItem('dashboard_uploaded_doc_ids')
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
   return (
     <>
       <header className="sticky top-0 z-50 h-14 border-b border-gray-200 bg-white/80 backdrop-blur-md">
@@ -94,21 +119,24 @@ export function Header() {
               <Menu className="h-5 w-5" />
             </button>
 
-            <Link to="/dashboard" className="flex items-center gap-2 text-primary-600 font-bold text-lg no-underline">
+            <button
+              onClick={(e) => handleNavClick(e, '/dashboard')}
+              className="flex items-center gap-2 text-primary-600 font-bold text-lg no-underline cursor-pointer border-0 bg-transparent p-0"
+            >
               <Sparkles className="h-6 w-6" />
               <span>DocMind</span>
-            </Link>
+            </button>
 
             <nav className="hidden md:flex items-center gap-1">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon
                 const isActive = location.pathname.startsWith(item.path)
                 return (
-                  <Link
+                  <button
                     key={item.path}
-                    to={item.path}
+                    onClick={(e) => handleNavClick(e, item.path)}
                     className={cn(
-                      'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors no-underline',
+                      'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer border-0 bg-transparent',
                       isActive
                         ? 'bg-primary-100 text-primary-600'
                         : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
@@ -116,7 +144,7 @@ export function Header() {
                   >
                     <Icon className="h-4 w-4" />
                     {item.label}
-                  </Link>
+                  </button>
                 )
               })}
             </nav>
@@ -190,7 +218,7 @@ export function Header() {
                   <p className="text-xs text-gray-500">{user?.email}</p>
                 </div>
                 <button
-                  onClick={() => { navigate('/settings'); setMenuOpen(false) }}
+                  onClick={() => { clearPendingDocsIfNeeded(); navigate('/settings'); setMenuOpen(false) }}
                   className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer border-0 bg-transparent"
                 >
                   <Settings className="h-4 w-4" />
@@ -236,12 +264,11 @@ export function Header() {
                 const Icon = item.icon
                 const isActive = location.pathname.startsWith(item.path)
                 return (
-                  <Link
+                  <button
                     key={item.path}
-                    to={item.path}
-                    onClick={() => setMobileNavOpen(false)}
+                    onClick={(e) => handleNavClick(e, item.path)}
                     className={cn(
-                      'flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors no-underline mb-0.5',
+                      'flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors mb-0.5 cursor-pointer border-0 bg-transparent w-full text-left',
                       isActive
                         ? 'bg-primary-50 text-primary-600'
                         : 'text-gray-700 hover:bg-gray-50'
@@ -249,19 +276,18 @@ export function Header() {
                   >
                     <Icon className="h-5 w-5" />
                     {item.label}
-                  </Link>
+                  </button>
                 )
               })}
             </div>
             <div className="border-t border-gray-200 p-4">
-              <Link
-                to="/settings"
-                onClick={() => setMobileNavOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 no-underline"
+              <button
+                onClick={(e) => handleNavClick(e, '/settings')}
+                className="flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer bg-transparent border-0 w-full text-left"
               >
                 <Settings className="h-5 w-5" />
                 设置
-              </Link>
+              </button>
             </div>
           </nav>
         </div>

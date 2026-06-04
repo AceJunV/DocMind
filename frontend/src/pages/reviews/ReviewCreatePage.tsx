@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Check,
@@ -9,12 +9,14 @@ import {
   GitCompare,
   Loader2,
   Play,
+  Plus,
   Sparkles,
   XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDocumentStore } from '@/stores/documentStore'
-import { AGENT_COLORS, useAgentStore } from '@/stores/agentStore'
+import { useAgentStore, AGENT_COLORS, buildSystemPrompt } from '@/stores/agentStore'
+import { UnifiedAddModal } from '@/pages/agents/AgentListPage'
 import { useReviewStore } from '@/stores/reviewStore'
 import { useAuthStore } from '@/stores/authStore'
 import { isModelConfigValid, useSettingsStore } from '@/stores/settingsStore'
@@ -27,12 +29,13 @@ import {
 } from '@/services/reviewEngine'
 import { toast } from '@/components/ui/Toast'
 import { createId } from '@/utils/id'
-import type { Agent, AgentReview, CompareReviewReport, DiffPointReview, DiffResult, Review, ReviewMode, TeachingDimension } from '@/types'
+import type { Agent, AgentReview, AgentTemplate, CompareReviewReport, DiffPointReview, DiffResult, Review, ReviewMode, TeachingDimension } from '@/types'
 import { computeDiff } from '@/services/compareService'
 import { DiffViewer } from '@/components/reviews/DiffViewer'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 type ReviewProgressItem = {
   status: 'pending' | 'reviewing' | 'done' | 'error'
@@ -480,15 +483,25 @@ function buildAgentDetailCopy(agent: Agent, item: ReviewProgressItem) {
 
 export default function ReviewCreatePage() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const preselectedDocId = searchParams.get('doc')
+  const fromDashboard = searchParams.get('from') === 'dashboard'
+  const fromReviews = searchParams.get('from') === 'reviews'
   const { user } = useAuthStore()
   const allDocuments = useDocumentStore((state) => state.documents)
   const documents = useMemo(() => allDocuments.filter((document) => document.status === 'ready'), [allDocuments])
+  const removeDocument = useDocumentStore((state) => state.removeDocument)
+  const updateDocument = useDocumentStore((state) => state.updateDocument)
+  const registerCleanupDocs = useDocumentStore((state) => state.registerCleanupDocs)
+  const cancelCleanup = useDocumentStore((state) => state.cancelCleanup)
   const incrementReviewCount = useDocumentStore((state) => state.incrementReviewCount)
   const agents = useAgentStore((state) => state.agents)
+  const templates = useAgentStore((state) => state.templates)
+  const templateVisibility = useAgentStore((state) => state.templateVisibility)
   const incrementUsage = useAgentStore((state) => state.incrementUsage)
   const addReview = useReviewStore((state) => state.addReview)
   const updateReview = useReviewStore((state) => state.updateReview)
+  const removeReview = useReviewStore((state) => state.removeReview)
   const config = useSettingsStore((state) => state.currentConfig)
   const hasValidConfig = isModelConfigValid(config)
 
@@ -505,10 +518,33 @@ export default function ReviewCreatePage() {
   const [runningStartedAt, setRunningStartedAt] = useState<number | null>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const abortRef = useRef<AbortController | null>(null)
+  const cancelledRef = useRef(false)
   const dimTimersRef = useRef<Record<string, ReturnType<typeof setInterval>>>({})
 
+  const [showAddAgentModal, setShowAddAgentModal] = useState(false)
+
+  const visibleAgents = useMemo(() => agents.filter((a) => a.visibleInReview !== false), [agents])
+  const visibleTemplates = useMemo(() => templates.filter((t) => templateVisibility[t.id] !== false), [templates, templateVisibility])
+
   const selectedDoc = documents.find((document) => document.id === selectedDocId)
-  const selectedAgents = agents.filter((agent) => selectedAgentIds.includes(agent.id))
+  const selectedAgentEntries = useMemo(() => {
+    const entries: Array<{ type: 'agent'; agent: Agent } | { type: 'template'; template: AgentTemplate }> = []
+    for (const id of selectedAgentIds) {
+      if (id.startsWith('tpl-')) {
+        const tpl = templates.find((t) => t.id === id.slice(4))
+        if (tpl) entries.push({ type: 'template', template: tpl })
+      } else {
+        const agent = agents.find((a) => a.id === id)
+        if (agent) entries.push({ type: 'agent', agent })
+      }
+    }
+    return entries
+  }, [selectedAgentIds, agents, templates])
+  const selectedAgents = selectedAgentEntries.map((e) => {
+    if (e.type === 'agent') return e.agent
+    const t = e.template
+    return { id: `tpl-${t.id}`, name: t.name, avatar: t.avatar, tagline: t.tagline, color: t.color, system_prompt: buildSystemPrompt(t), personality: t.personality, expertise: t.expertise, behavior: t.behavior, category: t.category } as Agent
+  })
   const progressItems = selectedAgents.map((agent) => progress[agent.id] || { status: 'pending', text: '', dimensionsCompleted: 0 })
   const successCount = progressItems.filter((item) => item.status === 'done').length
   const failedCount = progressItems.filter((item) => item.status === 'error').length
@@ -543,6 +579,24 @@ export default function ReviewCreatePage() {
     return () => clearInterval(timer)
   }, [phase, runningStartedAt])
 
+  useEffect(() => {
+    if (!fromDashboard && !fromReviews) return
+    if (fromDashboard) {
+      const storedIds = sessionStorage.getItem('dashboard_uploaded_doc_ids')
+      if (storedIds) {
+        try {
+          const docIds: string[] = JSON.parse(storedIds)
+          registerCleanupDocs(docIds)
+        } catch { /* ignore */ }
+      } else if (selectedDocId) {
+        registerCleanupDocs([selectedDocId])
+      }
+    } else if (fromReviews && selectedDocId) {
+      registerCleanupDocs([selectedDocId])
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const toggleAgent = (id: string) => {
     setSelectedAgentIds((previous) => {
       if (previous.includes(id)) {
@@ -559,9 +613,11 @@ export default function ReviewCreatePage() {
   }
 
   const selectAllAgents = () => {
-    const nextIds = agents.slice(0, MAX_REVIEW_AGENTS).map((agent) => agent.id)
-    setSelectedAgentIds(nextIds)
-    if (agents.length > MAX_REVIEW_AGENTS) {
+    const agentIds = visibleAgents.map((a) => a.id)
+    const tplIds = visibleTemplates.map((t) => `tpl-${t.id}`)
+    const allIds = [...agentIds, ...tplIds].slice(0, MAX_REVIEW_AGENTS)
+    setSelectedAgentIds(allIds)
+    if (allIds.length < agentIds.length + tplIds.length) {
       toast('info', `最多选择 ${MAX_REVIEW_AGENTS} 个角色，已选择前 ${MAX_REVIEW_AGENTS} 个`)
     }
   }
@@ -577,10 +633,17 @@ export default function ReviewCreatePage() {
     const activeDocId = reviewMode === 'compare' ? newDocId : selectedDocId
     if (!canStart || !activeDoc) return
 
+    cancelCleanup()
+    cancelledRef.current = false
     setPhase('running')
     setRunningStartedAt(getTimestampMs())
     setElapsedSeconds(0)
     abortRef.current = new AbortController()
+
+    updateDocument(activeDocId, { status: 'reviewed' })
+    if (reviewMode === 'compare' && oldDocId) {
+      updateDocument(oldDocId, { status: 'reviewed' })
+    }
 
     const review: Review = {
       id: createId(),
@@ -642,6 +705,8 @@ export default function ReviewCreatePage() {
           }))
         }
       }))
+
+      if (cancelledRef.current) return
 
       updateReview(review.id, {
         status: 'completed',
@@ -718,6 +783,8 @@ export default function ReviewCreatePage() {
     }
 
     await Promise.all(Array.from({ length: Math.min(maxConcurrent, selectedAgents.length) }, worker))
+
+    if (cancelledRef.current) return
 
     const finalResults = results.filter((result): result is AgentReview => result !== null)
     const successfulResults = finalResults.filter((result) => result.status !== 'failed')
@@ -846,7 +913,25 @@ export default function ReviewCreatePage() {
             onClick={() => {
               abortRef.current?.abort()
               Object.values(dimTimersRef.current).forEach((timer) => clearInterval(timer))
-              toast('info', '评审已取消，已完成的结果会保留')
+              cancelledRef.current = true
+              const currentReviewId = reviewId
+              if (currentReviewId) {
+                removeReview(currentReviewId)
+              }
+              const currentDocId = reviewMode === 'compare' ? newDocId : selectedDocId
+              if (currentDocId) {
+                updateDocument(currentDocId, { status: 'ready' })
+                registerCleanupDocs([currentDocId])
+              }
+              if (reviewMode === 'compare' && oldDocId) {
+                updateDocument(oldDocId, { status: 'ready' })
+              }
+              setPhase('config')
+              setProgress({})
+              setReviewId('')
+              setRunningStartedAt(null)
+              setElapsedSeconds(0)
+              toast('info', '评审已取消')
             }}
           >
             <XCircle className="h-4 w-4" />
@@ -997,9 +1082,42 @@ export default function ReviewCreatePage() {
 
   return (
     <div className="space-y-6 animate-slide-up">
-      <Link to="/reviews" className="flex items-center gap-1 text-sm text-gray-500 no-underline hover:text-gray-700">
-        <ArrowLeft className="h-4 w-4" /> 返回评审大厅
-      </Link>
+      {fromDashboard ? (
+        <button
+          onClick={() => {
+            const { clearPendingCleanup } = useDocumentStore.getState()
+            clearPendingCleanup()
+            const storedIds = sessionStorage.getItem('dashboard_uploaded_doc_ids')
+            if (storedIds) {
+              try {
+                const docIds: string[] = JSON.parse(storedIds)
+                docIds.forEach((id) => removeDocument(id))
+              } catch { /* ignore parse errors */ }
+              sessionStorage.removeItem('dashboard_uploaded_doc_ids')
+            } else if (selectedDocId) {
+              removeDocument(selectedDocId)
+            }
+            navigate('/dashboard')
+          }}
+          className="flex items-center gap-1 text-sm text-gray-500 no-underline hover:text-gray-700 bg-transparent border-0 cursor-pointer p-0"
+        >
+          <ArrowLeft className="h-4 w-4" /> 返回首页重新上传
+        </button>
+      ) : fromReviews ? (
+        <button
+          onClick={() => {
+            useDocumentStore.getState().clearPendingCleanup()
+            navigate('/reviews')
+          }}
+          className="flex items-center gap-1 text-sm text-gray-500 no-underline hover:text-gray-700 bg-transparent border-0 cursor-pointer p-0"
+        >
+          <ArrowLeft className="h-4 w-4" /> 返回评审大厅
+        </button>
+      ) : (
+        <Link to="/reviews" className="flex items-center gap-1 text-sm text-gray-500 no-underline hover:text-gray-700">
+          <ArrowLeft className="h-4 w-4" /> 返回评审大厅
+        </Link>
+      )}
 
       <div className="dm-page-header">
         <div>
@@ -1220,7 +1338,7 @@ export default function ReviewCreatePage() {
                 <h2 className="mt-2 text-lg font-semibold text-gray-900">选择评审角色</h2>
               </div>
               <div className="flex items-center gap-2">
-                {agents.length > 0 && (
+                {(visibleAgents.length > 0 || visibleTemplates.length > 0) && (
                   <button
                     onClick={selectedAgentIds.length > 0 ? () => setSelectedAgentIds([]) : selectAllAgents}
                     className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
@@ -1228,12 +1346,18 @@ export default function ReviewCreatePage() {
                     {selectedAgentIds.length > 0 ? '清空' : '全选'}
                   </button>
                 )}
+                <button
+                  onClick={() => { setShowAddAgentModal(true) }}
+                  className="inline-flex items-center gap-1 rounded-full bg-primary-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-primary-700 cursor-pointer border-0"
+                >
+                  <Plus className="h-3 w-3" /> 新增角色
+                </button>
                 <Badge variant="default">{selectedAgentIds.length}/{MAX_REVIEW_AGENTS}</Badge>
               </div>
             </div>
           </CardHeader>
-          <CardContent>
-            {agents.length === 0 ? (
+          <CardContent className="space-y-3">
+            {visibleAgents.length === 0 && visibleTemplates.length === 0 ? (
               <div className="rounded-[24px] border border-dashed border-primary-200 bg-primary-50/60 px-5 py-10 text-center">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-primary-600 shadow-sm">
                   <Sparkles className="h-6 w-6" />
@@ -1242,16 +1366,62 @@ export default function ReviewCreatePage() {
                 <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-gray-600">
                   角色会以教研老师、学生或家长视角参与评审。创建完成后回到这里即可一键选择。
                 </p>
-                <Link to="/agents/create" className="mt-4 inline-flex no-underline">
-                  <Button>
-                    <Sparkles className="h-4 w-4" />
-                    创建角色
-                  </Button>
-                </Link>
+                <button
+                  onClick={() => setShowAddAgentModal(true)}
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 cursor-pointer border-0"
+                >
+                  <Plus className="h-4 w-4" /> 新增角色
+                </button>
               </div>
             ) : (
               <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-                {agents.map((agent) => {
+                {visibleTemplates.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2 py-1">
+                      <Sparkles className="h-3 w-3 text-primary-500" />
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">预设角色</span>
+                    </div>
+                    {visibleTemplates.map((template) => {
+                      const tplId = `tpl-${template.id}`
+                      const isSelected = selectedAgentIds.includes(tplId)
+                      const borderColor = AGENT_COLORS[template.color]
+                      return (
+                        <button
+                          key={tplId}
+                          onClick={() => toggleAgent(tplId)}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-colors',
+                            isSelected ? 'border-primary-500 bg-primary-50' : 'border-gray-200 bg-white hover:bg-gray-50'
+                          )}
+                        >
+                          <div
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm"
+                            style={{
+                              backgroundColor: `${borderColor}18`,
+                              boxShadow: `0 0 0 1.5px ${borderColor}`,
+                            }}
+                          >
+                            {template.avatar}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-gray-900">{template.name}</p>
+                            <p className="mt-1 truncate text-xs text-gray-500">{template.tagline}</p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-medium text-primary-600">官方</span>
+                          {isSelected ? <Check className="h-4 w-4 shrink-0 text-primary-600" /> : null}
+                        </button>
+                      )
+                    })}
+                  </>
+                )}
+                {visibleTemplates.length > 0 && visibleAgents.length > 0 && (
+                  <div className="flex items-center gap-2 py-1">
+                    <div className="h-px flex-1 bg-gray-200" />
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">我的角色</span>
+                    <div className="h-px flex-1 bg-gray-200" />
+                  </div>
+                )}
+                {visibleAgents.map((agent) => {
                   const isSelected = selectedAgentIds.includes(agent.id)
                   return (
                     <button
@@ -1308,6 +1478,14 @@ export default function ReviewCreatePage() {
           {reviewMode === 'compare' ? '开始对比评审' : '开始评审'}
         </Button>
       </div>
+
+      {showAddAgentModal && (
+        <UnifiedAddModal
+          initialTab="custom"
+          onClose={() => setShowAddAgentModal(false)}
+          onSaved={() => setShowAddAgentModal(false)}
+        />
+      )}
     </div>
   )
 }

@@ -8,6 +8,7 @@ interface ReviewState {
   addReview: (review: Review) => void
   addCompareReview: (review: Review) => void
   updateReview: (id: string, updates: Partial<Review>) => void
+  removeReview: (id: string) => void
   getReview: (id: string) => Review | undefined
   getReviewsByDocument: (docId: string) => Review[]
   toggleSuggestionAdopted: (reviewId: string, suggestionId: string) => void
@@ -46,6 +47,10 @@ export const useReviewStore = create<ReviewState>()(
             })
           }
         }
+      },
+
+      removeReview: (id) => {
+        set((state) => ({ reviews: state.reviews.filter((r) => r.id !== id) }))
       },
 
       getReview: (id) => get().reviews.find((r) => r.id === id),

@@ -1,9 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Plus, Search, Bot, Sparkles, Trash2, Edit3, X, RotateCcw, Recycle,
-  ChevronDown, ChevronRight, ChevronLeft, Send, Check, Dices,
-  Download, Upload,
+  Plus, Search, Bot, Trash2, X, RotateCcw, Recycle,
+  Download, Upload, Sparkles, Check, Dices, Send,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgentStore, AGENT_COLORS, createAgentFromTemplate } from '@/stores/agentStore'
@@ -17,13 +16,88 @@ import { createId } from '@/utils/id'
 import type { Agent, AgentTemplate, AgentColor, AgentCategory, TeachingDimension } from '@/types'
 import { TEACHING_DIMENSIONS } from '@/types'
 
-const TEMPLATE_GROUPS: { label: string; icon: string; ids: string[] }[] = [
-  { label: '课程与课堂专家', icon: '📐', ids: ['tpl-course-expert', 'tpl-real-classroom-teacher'] },
-  { label: '内容与题目专家', icon: '🎬', ids: ['tpl-script-veteran', 'tpl-question-researcher'] },
-  { label: '学习者视角', icon: '🎒', ids: ['tpl-child-cognition-expert', 'tpl-student-representative'] },
-]
-
 const ALL_COLORS: AgentColor[] = ['indigo', 'violet', 'pink', 'orange', 'teal', 'sky', 'slate', 'green', 'rose', 'amber', 'emerald', 'cyan']
+
+// ======================== Preset Detail Modal (read-only) ========================
+
+function PresetDetailModal({ template, onClose }: { template: AgentTemplate; onClose: () => void }) {
+  const borderColor = AGENT_COLORS[template.color]
+  const categoryName = CATEGORY_OPTIONS.find((o) => o.value === template.category)?.label || template.category
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl mx-4 max-h-[85vh] overflow-y-auto animate-slide-up" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full text-xl shrink-0"
+              style={{ backgroundColor: borderColor + '15', boxShadow: `0 0 0 2px ${borderColor}` }}>
+              {template.avatar}
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">{template.name}</h3>
+              <p className="text-xs text-gray-500">{template.tagline}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 bg-transparent border-0 cursor-pointer">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-600 border border-primary-200">官方</span>
+            <span className="rounded-full px-2.5 py-1 text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200">{categoryName}</span>
+            {template.focusDimension && (
+              <span className="rounded-full px-2.5 py-1 text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200">{template.focusDimension}</span>
+            )}
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">角色简介</h4>
+            <p className="text-sm text-gray-600 leading-relaxed">{template.description}</p>
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">专长领域</h4>
+            <div className="flex flex-wrap gap-1.5">
+              {template.expertise.map((e) => (
+                <span key={e} className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: borderColor + '15', color: borderColor }}>{e}</span>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">性格特征</h4>
+            <div className="space-y-2">
+              {[
+                { label: '直接度', value: template.personality.directness },
+                { label: '严格度', value: template.personality.strictness },
+                { label: '幽默感', value: template.personality.humor },
+                { label: '共情力', value: template.personality.empathy },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center gap-3">
+                  <span className="text-xs text-gray-500 w-12">{item.label}</span>
+                  <div className="flex-1 h-2 rounded-full bg-gray-200">
+                    <div className="h-full rounded-full bg-primary-500" style={{ width: `${item.value * 20}%` }} />
+                  </div>
+                  <span className="text-xs text-gray-400 w-6 text-right">{item.value}/5</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          {template.behavior.style && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-1">说话风格</h4>
+              <p className="text-sm text-gray-600">{template.behavior.style}</p>
+            </div>
+          )}
+          {template.behavior.catchphrase && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-1">口头禅</h4>
+              <p className="text-sm text-gray-600 italic">「{template.behavior.catchphrase}」</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const CATEGORY_OPTIONS: { value: AgentCategory; label: string; icon: string }[] = [
   { value: 'teacher', label: '教研老师', icon: '👨‍🏫' },
@@ -122,131 +196,18 @@ function downloadFile(filename: string, content: string) {
 
 // ======================== Recommend Tab ========================
 
-function MiniAgentCard({ agent, onClick }: { agent: Agent; onClick: () => void }) {
-  const borderColor = AGENT_COLORS[agent.color]
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-2 shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
-    >
-      <div
-        className="flex h-8 w-8 items-center justify-center rounded-full text-base shrink-0"
-        style={{ backgroundColor: borderColor + '15', boxShadow: `0 0 0 2px ${borderColor}` }}
-      >
-        {agent.avatar || agent.name[0]}
-      </div>
-      <span className="text-xs font-medium text-gray-700 whitespace-nowrap">{agent.name}</span>
-    </button>
-  )
-}
-
-function RecommendTemplateCard({ template, onUse }: {
-  template: AgentTemplate; onUse: () => void
-}) {
-  const borderColor = AGENT_COLORS[template.color]
-  return (
-    <div
-      className="w-48 shrink-0 snap-start rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
-      style={{ borderTopWidth: '3px', borderTopColor: borderColor }}
-    >
-      <div className="flex items-center gap-2.5 mb-2.5">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-full text-xl shrink-0"
-          style={{ backgroundColor: borderColor + '15', boxShadow: `0 0 0 2px ${borderColor}` }}
-        >
-          {template.avatar}
-        </div>
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-gray-900 truncate">{template.name}</h3>
-          <p className="text-[10px] text-gray-500 truncate">{template.tagline}</p>
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-1 mb-3">
-        {template.tags.slice(0, 2).map((tag) => (
-          <span key={tag} className="rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ backgroundColor: borderColor + '15', color: borderColor }}>
-            {tag}
-          </span>
-        ))}
-      </div>
-      <button
-        onClick={onUse}
-        className="w-full rounded-lg bg-primary-600 py-1.5 text-xs font-medium text-white hover:bg-primary-700 transition-colors cursor-pointer border-0"
-      >
-        使用此模板
-      </button>
-    </div>
-  )
-}
-
-function TemplateGroup({ group, templates, onUseTemplate }: {
-  group: { label: string; icon: string }
-  templates: AgentTemplate[]
-  onUseTemplate: (tpl: AgentTemplate) => void
-}) {
-  const [expanded, setExpanded] = useState(true)
-  const scrollRef = useRef<HTMLDivElement>(null)
-
-  const scroll = (dir: 'left' | 'right') => {
-    if (!scrollRef.current) return
-    const amount = 400
-    scrollRef.current.scrollBy({ left: dir === 'left' ? -amount : amount, behavior: 'smooth' })
-  }
-
-  return (
-    <div>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 mb-3 cursor-pointer bg-transparent border-0 p-0 w-full text-left"
-      >
-        {expanded ? (
-          <ChevronDown className="h-4 w-4 text-gray-500" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-gray-500" />
-        )}
-        <span className="text-base">{group.icon}</span>
-        <h3 className="text-sm font-semibold text-gray-700">{group.label}</h3>
-        <span className="text-xs text-gray-400">{templates.length} 个角色</span>
-      </button>
-
-      {expanded && (
-        <div className="relative group/scroll">
-          <button
-            onClick={() => scroll('left')}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 rounded-full bg-white shadow-md border border-gray-200 flex items-center justify-center opacity-0 group-hover/scroll:opacity-100 transition-opacity cursor-pointer"
-          >
-            <ChevronLeft className="h-4 w-4 text-gray-600" />
-          </button>
-          <div
-            ref={scrollRef}
-            className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 -mx-1 px-1 scrollbar-hide"
-          >
-            {templates.map((tpl) => (
-              <RecommendTemplateCard key={tpl.id} template={tpl} onUse={() => onUseTemplate(tpl)} />
-            ))}
-          </div>
-          <button
-            onClick={() => scroll('right')}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 rounded-full bg-white shadow-md border border-gray-200 flex items-center justify-center opacity-0 group-hover/scroll:opacity-100 transition-opacity cursor-pointer"
-          >
-            <ChevronRight className="h-4 w-4 text-gray-600" />
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ======================== Agent Manage Card ========================
 
-function AgentManageCard({ agent, onEdit, onDelete, onExport, onImport }: {
-  agent: Agent; onEdit: () => void; onDelete: () => void; onExport: () => void; onImport: () => void
+function AgentManageCard({ agent, onEdit, onDelete, onExport, onImport, onToggleVisibility }: {
+  agent: Agent; onEdit: () => void; onDelete: () => void; onExport: () => void; onImport: () => void; onToggleVisibility: () => void
 }) {
   const borderColor = AGENT_COLORS[agent.color]
-  const isOfficial = agent.source === 'template'
+  const isVisible = agent.visibleInReview !== false
   return (
     <div
-      className="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
+      className="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
       style={{ borderLeftWidth: '3px', borderLeftColor: borderColor }}
+      onClick={onEdit}
     >
       <div className="flex items-start gap-3 mb-3">
         <div
@@ -259,9 +220,6 @@ function AgentManageCard({ agent, onEdit, onDelete, onExport, onImport }: {
           <h3 className="text-base font-semibold text-gray-900">{agent.name}</h3>
           <p className="text-xs text-gray-500">{agent.tagline}</p>
         </div>
-        {isOfficial && (
-          <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-medium text-primary-600 border border-primary-200">官方</span>
-        )}
       </div>
       <div className="flex flex-wrap gap-1.5 mb-3">
         {agent.expertise.slice(0, 4).map((e) => (
@@ -271,41 +229,48 @@ function AgentManageCard({ agent, onEdit, onDelete, onExport, onImport }: {
         ))}
       </div>
       <p className="text-xs text-gray-500 mb-3">
-        {isOfficial ? '来自模板' : agent.source === 'custom' ? '自定义创建' : '社区'}
+        {agent.source === 'template' ? '来自模板' : agent.source === 'custom' ? '自定义创建' : '社区'}
         {' · '}已使用 {agent.usage_count} 次
         {agent.category && (
           <> · {{ teacher: '教研老师', student: '学生', parent: '家长' }[agent.category]}</>
         )}
       </p>
-      <div className="flex gap-2 border-t border-gray-100 pt-3">
-        <button
-          onClick={onEdit}
-          className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer bg-white"
-        >
-          <Edit3 className="h-3.5 w-3.5" /> 编辑
-        </button>
-        {!isOfficial && (
+      <div className="flex items-center justify-between border-t border-gray-100 pt-3" onClick={(e) => e.stopPropagation()}>
+        <label className="relative inline-flex cursor-pointer items-center">
+          <input type="checkbox" checked={isVisible} onChange={onToggleVisibility}
+            className="peer sr-only" />
+          <div className={cn(
+            'h-5 w-9 rounded-full after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all',
+            isVisible ? 'bg-primary-600 after:translate-x-4' : 'bg-gray-300'
+          )}></div>
+          <span className={cn('ml-2 text-xs font-medium', isVisible ? 'text-primary-600' : 'text-gray-400')}>
+            {isVisible ? '参与评审' : '不参与评审'}
+          </span>
+        </label>
+        <div className="flex gap-2">
+          {agent.source !== 'template' && (
+            <button
+              onClick={onImport}
+              className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer bg-white"
+              title="导入 MD 文档覆盖当前角色"
+            >
+              <Upload className="h-3.5 w-3.5" />
+            </button>
+          )}
           <button
-            onClick={onImport}
+            onClick={onExport}
             className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer bg-white"
-            title="导入 MD 文档覆盖当前角色"
+            title="导出为 MD 文档"
           >
-            <Upload className="h-3.5 w-3.5" />
+            <Download className="h-3.5 w-3.5" />
           </button>
-        )}
-        <button
-          onClick={onExport}
-          className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer bg-white"
-          title="导出为 MD 文档"
-        >
-          <Download className="h-3.5 w-3.5" />
-        </button>
-        <button
-          onClick={onDelete}
-          className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer bg-white"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+          <button
+            onClick={onDelete}
+            className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer bg-white"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -318,11 +283,10 @@ function PresetAddModal({ initialTemplate, onClose, onSaved, embedded }: {
 }) {
   const { user } = useAuthStore()
   const templates = useAgentStore((s) => s.templates)
-  const hiddenTemplateIds = useAgentStore((s) => s.hiddenTemplateIds)
   const agents = useAgentStore((s) => s.agents)
   const addAgent = useAgentStore((s) => s.addAgent)
 
-  const visibleTemplates = templates.filter((t) => !hiddenTemplateIds.includes(t.id))
+  const visibleTemplates = templates
   const [selectedTpl, setSelectedTpl] = useState<AgentTemplate | null>(initialTemplate || null)
   const [step, setStep] = useState<'select' | 'edit'>(initialTemplate ? 'edit' : 'select')
 
@@ -353,11 +317,6 @@ function PresetAddModal({ initialTemplate, onClose, onSaved, embedded }: {
 
   const handleSave = () => {
     if (!selectedTpl || !name.trim()) return
-    const exists = agents.some((a) => a.template_id === selectedTpl.id)
-    if (exists) {
-      toast('info', `你已经添加过「${selectedTpl.name}」了`)
-      return
-    }
     const agent = createAgentFromTemplate(selectedTpl, user?.id || '')
     // Apply user edits
     agent.name = name.trim()
@@ -378,31 +337,25 @@ function PresetAddModal({ initialTemplate, onClose, onSaved, embedded }: {
       {step === 'select' ? (
         <div className="flex-1 overflow-y-auto p-5">
           <div className="grid grid-cols-2 gap-3">
-            {visibleTemplates.map((tpl) => {
-              const bc = AGENT_COLORS[tpl.color]
-              const added = agents.some((a) => a.template_id === tpl.id)
-              return (
-                <button
-                  key={tpl.id}
-                  onClick={() => !added && selectTemplate(tpl)}
-                  disabled={added}
-                  className={cn(
-                    'flex items-center gap-3 rounded-xl border p-3 text-left transition-all cursor-pointer',
-                    added ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed' : 'border-gray-200 hover:border-primary-300 hover:shadow-sm bg-white'
-                  )}
-                >
-                  <div
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-xl shrink-0"
-                    style={{ backgroundColor: bc + '15', boxShadow: `0 0 0 2px ${bc}` }}
+{visibleTemplates.map((tpl) => {
+                const bc = AGENT_COLORS[tpl.color]
+                return (
+                  <button
+                    key={tpl.id}
+                    onClick={() => selectTemplate(tpl)}
+                    className="flex items-center gap-3 rounded-xl border border-gray-200 hover:border-primary-300 hover:shadow-sm bg-white p-3 text-left transition-all cursor-pointer"
                   >
-                    {tpl.avatar}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-sm font-semibold text-gray-900 truncate">{tpl.name}</h4>
-                    <p className="text-[10px] text-gray-500 truncate">{tpl.tagline}</p>
-                  </div>
-                  {added && <span className="text-[10px] text-gray-400 shrink-0">已添加</span>}
-                </button>
+                    <div
+                      className="flex h-10 w-10 items-center justify-center rounded-full text-xl shrink-0"
+                      style={{ backgroundColor: bc + '15', boxShadow: `0 0 0 2px ${bc}` }}
+                    >
+                      {tpl.avatar}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-sm font-semibold text-gray-900 truncate">{tpl.name}</h4>
+                      <p className="text-[10px] text-gray-500 truncate">{tpl.tagline}</p>
+                    </div>
+                  </button>
               )
             })}
           </div>
@@ -1138,74 +1091,37 @@ function UnifiedAddModal({
 
 // ======================== Main Page ========================
 
+export { UnifiedAddModal }
+export type { AddAgentTab }
+
 export default function AgentListPage() {
   const navigate = useNavigate()
   const templates = useAgentStore((s) => s.templates)
-  const hiddenTemplateIds = useAgentStore((s) => s.hiddenTemplateIds)
+  const templateVisibility = useAgentStore((s) => s.templateVisibility)
+  const setTemplateVisibility = useAgentStore((s) => s.setTemplateVisibility)
   const agents = useAgentStore((s) => s.agents)
   const trashedAgents = useAgentStore((s) => s.trashedAgents)
   const removeAgent = useAgentStore((s) => s.removeAgent)
   const updateAgent = useAgentStore((s) => s.updateAgent)
-  const restoreTemplate = useAgentStore((s) => s.restoreTemplate)
   const restoreAgent = useAgentStore((s) => s.restoreAgent)
   const permanentlyDeleteAgent = useAgentStore((s) => s.permanentlyDeleteAgent)
 
   const [search, setSearch] = useState('')
-  const [activeTab, setActiveTab] = useState<'recommend' | 'manage' | 'trash'>('recommend')
+  const [activeTab, setActiveTab] = useState<'manage' | 'trash'>('manage')
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null)
   const [permanentDeleteTarget, setPermanentDeleteTarget] = useState<Agent | null>(null)
   const [importTarget, setImportTarget] = useState<Agent | null>(null)
   const importFileRef = useRef<HTMLInputElement>(null)
   const [presetModalTpl, setPresetModalTpl] = useState<AgentTemplate | null>(null)
+  const [detailModalTpl, setDetailModalTpl] = useState<AgentTemplate | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [addModalTab, setAddModalTab] = useState<AddAgentTab>('preset')
 
-  // Recommend tab: recently used agents
-  const recentlyUsedAgents = useMemo(() =>
-    agents
-      .filter((a) => a.last_used_at)
-      .sort((a, b) => new Date(b.last_used_at!).getTime() - new Date(a.last_used_at!).getTime())
-      .slice(0, 8),
-    [agents]
-  )
-
-  // Recommend tab: template groups
-  const visibleTemplates = templates.filter((t) => !hiddenTemplateIds.includes(t.id))
-  const filteredTemplates = visibleTemplates.filter((t) =>
-    !search || t.name.includes(search) || t.tags.some((tag) => tag.includes(search))
-  )
-  const groupedTemplates = useMemo(() => {
-    const filteredIds = new Set(filteredTemplates.map((t) => t.id))
-    const tplMap = new Map(filteredTemplates.map((t) => [t.id, t]))
-    const grouped: { label: string; icon: string; templates: AgentTemplate[] }[] = []
-    const usedIds = new Set<string>()
-    for (const group of TEMPLATE_GROUPS) {
-      const items = group.ids.filter((id) => filteredIds.has(id)).map((id) => tplMap.get(id)!)
-      if (items.length > 0) {
-        grouped.push({ label: group.label, icon: group.icon, templates: items })
-        items.forEach((t) => usedIds.add(t.id))
-      }
-    }
-    const ungrouped = filteredTemplates.filter((t) => !usedIds.has(t.id))
-    if (ungrouped.length > 0) {
-      grouped.push({ label: '其他', icon: '🤖', templates: ungrouped })
-    }
-    return grouped
-  }, [filteredTemplates])
-
-  // Manage tab: filtered agents
   const filteredAgents = agents.filter((a) =>
     !search || a.name.includes(search) || a.expertise.some((e) => e.includes(search))
   )
 
-  const hiddenTemplates = templates.filter((t) => hiddenTemplateIds.includes(t.id))
-  const trashCount = trashedAgents.length + hiddenTemplates.length
-
-  const handleUseTemplate = (tpl: AgentTemplate) => {
-    setPresetModalTpl(tpl)
-    setAddModalTab('preset')
-    setShowAddModal(true)
-  }
+  const trashCount = trashedAgents.length
 
   const handleDeleteAgent = (agent: Agent) => {
     removeAgent(agent.id)
@@ -1222,11 +1138,6 @@ export default function AgentListPage() {
     permanentlyDeleteAgent(agent.id)
     toast('success', `已永久删除「${agent.name}」`)
     setPermanentDeleteTarget(null)
-  }
-
-  const handleRestoreTemplate = (id: string) => {
-    restoreTemplate(id)
-    toast('success', '已恢复模板')
   }
 
   const handleExport = (agent: Agent) => {
@@ -1299,8 +1210,7 @@ export default function AgentListPage() {
       <div className="flex items-center gap-4">
         <div className="flex rounded-lg border border-gray-200 bg-white p-0.5">
           {[
-            { key: 'recommend' as const, label: '推荐角色', icon: Sparkles },
-            { key: 'manage' as const, label: `角色管理 (${agents.length})`, icon: Bot },
+            { key: 'manage' as const, label: `角色管理`, icon: Bot },
             { key: 'trash' as const, label: `回收站${trashCount > 0 ? ` (${trashCount})` : ''}`, icon: Recycle },
           ].map((tab) => {
             const TabIcon = tab.icon
@@ -1331,169 +1241,146 @@ export default function AgentListPage() {
         )}
       </div>
 
-      {agents.length === 0 && activeTab === 'recommend' ? (
-        <div className="rounded-2xl border border-primary-100 bg-primary-50 px-5 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-primary-800">创建你的第一个角色</p>
-              <p className="mt-1 text-xs leading-6 text-primary-700">可以从推荐模板开始，也可以直接创建自定义教研角色。</p>
-            </div>
-            <button
-              onClick={() => { setAddModalTab('custom'); setPresetModalTpl(null); setShowAddModal(true) }}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 cursor-pointer border-0"
-            >
-              <Plus className="h-4 w-4" />
-              创建角色
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {/* ====== Recommend Tab ====== */}
-      {activeTab === 'recommend' && (
-        <div className="space-y-6">
-          {/* Recently Used */}
-          {recentlyUsedAgents.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-sm font-semibold text-gray-700">最近使用</h3>
-                <span className="text-xs text-gray-400">{recentlyUsedAgents.length} 个角色</span>
-              </div>
-              <div className="flex gap-3 overflow-x-auto pb-2">
-                {recentlyUsedAgents.map((agent) => (
-                  <MiniAgentCard key={agent.id} agent={agent} onClick={() => setActiveTab('manage')} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Official Templates by Group */}
-          {filteredTemplates.length === 0 ? (
-            <div className="rounded-xl border border-gray-200 bg-white py-12 text-center">
-              <Sparkles className="mx-auto h-10 w-10 text-gray-300 mb-2" />
-              <p className="text-sm text-gray-500">
-                {search ? '没有匹配的模板' : '所有模板已隐藏，可以在回收站恢复'}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              {groupedTemplates.map((group) => (
-                <TemplateGroup
-                  key={group.label}
-                  group={group}
-                  templates={group.templates}
-                  onUseTemplate={handleUseTemplate}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ====== Manage Tab ====== */}
       {activeTab === 'manage' && (
-        filteredAgents.length === 0 ? (
-          <div className="rounded-xl border border-gray-200 bg-white py-16 text-center">
-            <Bot className="mx-auto h-12 w-12 text-gray-300 mb-3" />
-            <p className="text-gray-500 font-medium">还没有角色</p>
-            <p className="text-sm text-gray-400 mt-1">从推荐页面添加模板，或通过自定义/AI方式创建角色</p>
-            <div className="mt-4 flex justify-center gap-3">
-              <button onClick={() => setActiveTab('recommend')}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 cursor-pointer bg-white">
-                浏览推荐
-              </button>
-              <button onClick={() => { setAddModalTab('custom'); setPresetModalTpl(null); setShowAddModal(true) }}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 cursor-pointer border-0">
-                <Plus className="h-4 w-4" /> 自定义创建
-              </button>
+        <div className="space-y-8">
+          {/* Preset Roles Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-5 w-5 text-primary-600" />
+              <h2 className="text-base font-semibold text-gray-900">预设角色</h2>
+              <span className="text-xs text-gray-400">{templates.length} 个角色</span>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {templates.map((tpl) => {
+                const borderColor = AGENT_COLORS[tpl.color]
+                const isVisible = templateVisibility[tpl.id] !== false
+                return (
+                  <div
+                    key={tpl.id}
+                    className="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+                    style={{ borderLeftWidth: '3px', borderLeftColor: borderColor }}
+                    onClick={() => setDetailModalTpl(tpl)}
+                  >
+                    <div className="flex items-start gap-3 mb-3">
+                      <div
+                        className="flex h-12 w-12 items-center justify-center rounded-full text-2xl shrink-0"
+                        style={{ backgroundColor: borderColor + '15', boxShadow: `0 0 0 2px ${borderColor}` }}
+                      >
+                        {tpl.avatar}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-semibold text-gray-900">{tpl.name}</h3>
+                          <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-medium text-primary-600 border border-primary-200">官方</span>
+                        </div>
+                        <p className="text-xs text-gray-500">{tpl.tagline}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {tpl.tags.slice(0, 3).map((tag) => (
+                        <span key={tag} className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: borderColor + '15', color: borderColor }}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between border-t border-gray-100 pt-3" onClick={(e) => e.stopPropagation()}>
+                      <label className="relative inline-flex cursor-pointer items-center">
+                        <input type="checkbox" checked={isVisible} onChange={() => setTemplateVisibility(tpl.id, !isVisible)}
+                          className="peer sr-only" />
+                        <div className={cn(
+                          'h-5 w-9 rounded-full after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all',
+                          isVisible ? 'bg-primary-600 after:translate-x-4' : 'bg-gray-300'
+                        )}></div>
+                        <span className={cn('ml-2 text-xs font-medium', isVisible ? 'text-primary-600' : 'text-gray-400')}>
+                          {isVisible ? '参与评审' : '不参与评审'}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredAgents.map((agent) => (
-              <AgentManageCard
-                key={agent.id}
-                agent={agent}
-                onEdit={() => navigate(`/agents/${agent.id}/edit`)}
-                onDelete={() => setDeleteTarget(agent)}
-                onExport={() => handleExport(agent)}
-                onImport={() => handleImportClick(agent)}
-              />
-            ))}
+
+          {/* My Roles Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Bot className="h-5 w-5 text-gray-600" />
+              <h2 className="text-base font-semibold text-gray-900">我的角色</h2>
+              <span className="text-xs text-gray-400">{agents.length} 个角色</span>
+            </div>
+            {filteredAgents.length === 0 ? (
+              <div className="rounded-xl border border-gray-200 bg-white py-16 text-center">
+                <Bot className="mx-auto h-12 w-12 text-gray-300 mb-3" />
+                <p className="text-gray-500 font-medium">还没有角色</p>
+                <p className="text-sm text-gray-400 mt-1">通过自定义或AI方式创建角色</p>
+                <div className="mt-4 flex justify-center gap-3">
+                  <button onClick={() => { setAddModalTab('custom'); setPresetModalTpl(null); setShowAddModal(true) }}
+                    className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 cursor-pointer border-0">
+                    <Plus className="h-4 w-4" /> 创建角色
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {filteredAgents.map((agent) => (
+                  <AgentManageCard
+                    key={agent.id}
+                    agent={agent}
+                    onEdit={() => navigate(`/agents/${agent.id}/edit`)}
+                    onDelete={() => setDeleteTarget(agent)}
+                    onExport={() => handleExport(agent)}
+                    onImport={() => handleImportClick(agent)}
+                    onToggleVisibility={() => updateAgent(agent.id, { visibleInReview: agent.visibleInReview === false ? true : false })}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        )
+        </div>
       )}
 
       {/* ====== Trash Tab ====== */}
       {activeTab === 'trash' && (
         <div className="space-y-6">
-          {trashedAgents.length === 0 && hiddenTemplates.length === 0 ? (
+          {trashedAgents.length === 0 ? (
             <div className="rounded-xl border border-gray-200 bg-white py-16 text-center">
               <Recycle className="mx-auto h-12 w-12 text-gray-300 mb-3" />
               <p className="text-gray-500 font-medium">回收站是空的</p>
-              <p className="text-sm text-gray-400 mt-1">删除的角色和隐藏的模板会出现在这里</p>
+              <p className="text-sm text-gray-400 mt-1">删除的角色会出现在这里</p>
             </div>
           ) : (
-            <>
-              {trashedAgents.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-3">已删除的角色 ({trashedAgents.length})</h3>
-                  <div className="space-y-2">
-                    {trashedAgents.map((agent) => {
-                      const borderColor = AGENT_COLORS[agent.color]
-                      return (
-                        <div key={agent.id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full text-xl shrink-0 opacity-60"
-                            style={{ backgroundColor: borderColor + '15' }}>
-                            {agent.avatar || agent.name[0]}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-medium text-gray-700">{agent.name}</h4>
-                            <p className="text-xs text-gray-500">{agent.tagline}</p>
-                          </div>
-                          <div className="flex gap-2 shrink-0">
-                            <button onClick={() => handleRestoreAgent(agent)}
-                              className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer bg-white">
-                              <RotateCcw className="h-3 w-3" /> 恢复
-                            </button>
-                            <button onClick={() => setPermanentDeleteTarget(agent)}
-                              className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 cursor-pointer bg-white">
-                              <Trash2 className="h-3 w-3" /> 永久删除
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-              {hiddenTemplates.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-3">已隐藏的模板 ({hiddenTemplates.length})</h3>
-                  <div className="space-y-2">
-                    {hiddenTemplates.map((tpl) => {
-                      const borderColor = AGENT_COLORS[tpl.color]
-                      return (
-                        <div key={tpl.id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full text-xl shrink-0 opacity-60"
-                            style={{ backgroundColor: borderColor + '15' }}>
-                            {tpl.avatar}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-medium text-gray-700">{tpl.name}</h4>
-                            <p className="text-xs text-gray-500">{tpl.tagline}</p>
-                          </div>
-                          <button onClick={() => handleRestoreTemplate(tpl.id)}
-                            className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer bg-white shrink-0">
-                            <RotateCcw className="h-3 w-3" /> 恢复
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-            </>
+            <div>
+              <h3 className="text-sm font-medium text-gray-500 mb-3">已删除的角色 ({trashedAgents.length})</h3>
+              <div className="space-y-2">
+                {trashedAgents.map((agent) => {
+                  const borderColor = AGENT_COLORS[agent.color]
+                  return (
+                    <div key={agent.id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full text-xl shrink-0 opacity-60"
+                        style={{ backgroundColor: borderColor + '15' }}>
+                        {agent.avatar || agent.name[0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium text-gray-700">{agent.name}</h4>
+                        <p className="text-xs text-gray-500">{agent.tagline}</p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => handleRestoreAgent(agent)}
+                          className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer bg-white">
+                          <RotateCcw className="h-3 w-3" /> 恢复
+                        </button>
+                        <button onClick={() => setPermanentDeleteTarget(agent)}
+                          className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 cursor-pointer bg-white">
+                          <Trash2 className="h-3 w-3" /> 永久删除
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -1535,6 +1422,10 @@ export default function AgentListPage() {
         onConfirm={handleImportConfirm}
         onCancel={() => setImportTarget(null)}
       />
+
+      {detailModalTpl && (
+        <PresetDetailModal template={detailModalTpl} onClose={() => setDetailModalTpl(null)} />
+      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   BarChart3,
@@ -42,6 +42,9 @@ const FILE_COLOR_MAP: Record<string, string> = {
 export default function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const fromReview = searchParams.get('from') === 'review'
+  const reviewId = searchParams.get('reviewId')
   const document = useDocumentStore((state) => state.documents.find((item) => item.id === id))
   const removeDocument = useDocumentStore((state) => state.removeDocument)
   const reviews = useReviewStore((state) => state.reviews)
@@ -76,15 +79,15 @@ export default function DocumentDetailPage() {
   if (!document) {
     return (
       <div className="space-y-6 animate-slide-up">
-        <Link to="/documents" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
-          <ArrowLeft className="h-4 w-4" /> 返回文档列表
+        <Link to={fromReview && reviewId ? `/reviews/${reviewId}` : '/documents'} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
+          <ArrowLeft className="h-4 w-4" /> {fromReview ? '返回评审报告' : '返回文档列表'}
         </Link>
         <Card className="rounded-[28px]">
           <CardContent className="py-16 text-center">
             <FileText className="mx-auto mb-3 h-12 w-12 text-gray-300" />
             <p className="text-base font-medium text-gray-500">文档不存在或已被删除</p>
-            <Link to="/documents" className="mt-4 inline-flex rounded-xl bg-primary-600 px-4 py-2 text-sm font-medium text-white no-underline hover:bg-primary-700">
-              返回文档列表
+            <Link to={fromReview && reviewId ? `/reviews/${reviewId}` : '/documents'} className="mt-4 inline-flex rounded-xl bg-primary-600 px-4 py-2 text-sm font-medium text-white no-underline hover:bg-primary-700">
+              {fromReview ? '返回评审报告' : '返回文档列表'}
             </Link>
           </CardContent>
         </Card>
@@ -98,13 +101,16 @@ export default function DocumentDetailPage() {
   const handleDelete = () => {
     removeDocument(document.id)
     toast('success', `已删除文档《${document.title}》`)
-    navigate('/documents')
+    navigate(fromReview && reviewId ? `/reviews/${reviewId}` : '/documents')
   }
+
+  const backLink = fromReview && reviewId ? `/reviews/${reviewId}` : '/documents'
+  const backLabel = fromReview ? '返回评审报告' : '返回文档列表'
 
   return (
     <div className="space-y-6 animate-slide-up">
-      <Link to="/documents" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
-        <ArrowLeft className="h-4 w-4" /> 返回文档列表
+      <Link to={backLink} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
+        <ArrowLeft className="h-4 w-4" /> {backLabel}
       </Link>
 
       <section className="dm-hero-card rounded-[28px] px-6 py-6 sm:px-8">
@@ -175,6 +181,7 @@ export default function DocumentDetailPage() {
                 </Link>
               ) : null}
 
+              {!fromReview && (
               <button
                 onClick={() => setConfirmDelete(true)}
                 className="flex w-full items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-left transition-colors hover:bg-red-100 cursor-pointer"
@@ -187,6 +194,7 @@ export default function DocumentDetailPage() {
                   <p className="mt-1 text-xs leading-6 text-red-600">仅删除当前文档内容，不会自动删除既有评审记录。</p>
                 </div>
               </button>
+            )}
             </CardContent>
           </Card>
 
@@ -400,15 +408,17 @@ export default function DocumentDetailPage() {
         </div>
       </section>
 
-      <ConfirmDialog
-        open={confirmDelete}
-        title="确认删除文档"
-        description={`确定要删除《${document.title}》吗？文档内容会被移除，历史评审记录不会自动删除。`}
-        confirmText="删除"
-        variant="danger"
-        onConfirm={handleDelete}
-        onCancel={() => setConfirmDelete(false)}
-      />
+      {!fromReview && (
+        <ConfirmDialog
+          open={confirmDelete}
+          title="确认删除文档"
+          description={`确定要删除《${document.title}》吗？文档内容会被移除，历史评审记录不会自动删除。`}
+          confirmText="删除"
+          variant="danger"
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
     </div>
   )
 }

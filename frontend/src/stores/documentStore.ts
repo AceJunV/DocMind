@@ -5,6 +5,10 @@ import { useActivityStore } from './activityStore'
 
 interface DocumentState {
   documents: Document[]
+  pendingCleanupDocIds: string[]
+  registerCleanupDocs: (ids: string[]) => void
+  clearPendingCleanup: () => void
+  cancelCleanup: () => void
   addDocument: (doc: Document) => void
   updateDocument: (id: string, updates: Partial<Document>) => void
   removeDocument: (id: string) => void
@@ -16,6 +20,34 @@ export const useDocumentStore = create<DocumentState>()(
   persist(
     (set, get) => ({
       documents: [],
+      pendingCleanupDocIds: [],
+
+      registerCleanupDocs: (ids) => {
+        set({ pendingCleanupDocIds: ids })
+      },
+
+      clearPendingCleanup: () => {
+        const ids = get().pendingCleanupDocIds
+        if (ids.length > 0) {
+          ids.forEach((id) => {
+            const doc = get().documents.find((d) => d.id === id)
+            if (doc) {
+              useActivityStore.getState().addActivity({
+                type: 'upload',
+                text: `删除了文档《${doc.title}》`,
+              })
+            }
+          })
+          set((state) => ({
+            documents: state.documents.filter((d) => !ids.includes(d.id)),
+            pendingCleanupDocIds: [],
+          }))
+        }
+      },
+
+      cancelCleanup: () => {
+        set({ pendingCleanupDocIds: [] })
+      },
 
       addDocument: (doc) => {
         set((state) => ({ documents: [doc, ...state.documents] }))

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowRight, ClipboardCheck, Clock3, FileText, Plus, Sparkles } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowRight, ClipboardCheck, Clock3, FileText, Sparkles, Upload } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AGENT_COLORS } from '@/stores/agentStore'
 import { useReviewStore } from '@/stores/reviewStore'
 import { formatTimeAgo } from '@/utils/format'
+import { DocumentUploadModal } from '@/components/DocumentUploadModal'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
@@ -17,8 +18,10 @@ function getScoreVariant(score?: number) {
 }
 
 export default function ReviewListPage() {
+  const navigate = useNavigate()
   const reviews = useReviewStore((state) => state.reviews)
   const [activeTab, setActiveTab] = useState<'all' | 'completed' | 'in_progress'>('all')
+  const [showUpload, setShowUpload] = useState(false)
 
   const filteredReviews = reviews.filter((review) => (activeTab === 'all' ? true : review.status === activeTab))
   const completedCount = reviews.filter((review) => review.status === 'completed').length
@@ -63,12 +66,12 @@ export default function ReviewListPage() {
           </p>
         </div>
 
-        <Link to="/reviews/create" className="no-underline">
-          <Button>
-            <Plus className="h-4 w-4" />
-            发起评审
+        {reviews.length > 0 && (
+          <Button onClick={() => setShowUpload(true)} className="shrink-0">
+            <Upload className="h-4 w-4" />
+            上传文档
           </Button>
-        </Link>
+        )}
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -133,13 +136,11 @@ export default function ReviewListPage() {
               <p className="text-base font-medium text-gray-500">
                 {reviews.length === 0 ? '还没有评审记录' : '当前筛选条件下没有记录'}
               </p>
-              <p className="mt-2 text-sm text-gray-400">先上传文档并发起评审，这里才会出现可读、可追踪的结果。</p>
-              <Link to="/reviews/create" className="mt-5 inline-flex no-underline">
-                <Button>
-                  <Plus className="h-4 w-4" />
-                  发起评审
-                </Button>
-              </Link>
+              <p className="mt-2 text-sm text-gray-400">先上传教研案文档，再发起评审，这里才会出现可读、可追踪的结果。</p>
+              <Button onClick={() => setShowUpload(true)} className="mt-5">
+                <Upload className="h-4 w-4" />
+                上传文档
+              </Button>
             </div>
           ) : (
             <div className="space-y-4">
@@ -254,6 +255,8 @@ export default function ReviewListPage() {
           )}
         </CardContent>
       </Card>
+
+      <DocumentUploadModal open={showUpload} onClose={() => setShowUpload(false)} onUploaded={(docId) => navigate(`/reviews/create?doc=${docId}&from=reviews`)} />
     </div>
   )
 }

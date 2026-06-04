@@ -19,7 +19,7 @@ export interface Document {
   summary?: string
   word_count?: number
   teaching_plan?: TeachingPlanFields
-  status: 'uploading' | 'parsing' | 'ready' | 'error'
+  status: 'uploading' | 'parsing' | 'ready' | 'reviewed' | 'error'
   review_count: number
   created_at: string
   updated_at?: string
@@ -99,6 +99,7 @@ export interface Agent {
   color: AgentColor
   category?: AgentCategory
   focusDimension?: string
+  visibleInReview?: boolean
   creation_history?: { role: 'ai' | 'user'; content: string }[]
   last_used_at?: string
   created_at: string
@@ -123,6 +124,7 @@ export interface AgentTemplate {
     catchphrase?: string
   }
   color: AgentColor
+  visibleInReview?: boolean
 }
 
 export interface Review {

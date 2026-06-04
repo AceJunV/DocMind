@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   Copy,
   Download,
+  FileText,
   Lightbulb,
   MessageCircle,
   RefreshCw,
@@ -750,6 +751,12 @@ export default function ReviewDetailPage() {
                 <Copy className="h-4 w-4" />
                 复制
               </Button>
+              <Link to={`/documents/${review.document_id}?from=review&reviewId=${review.id}`} className="no-underline">
+                <Button variant="secondary">
+                  <FileText className="h-4 w-4" />
+                  文档详情
+                </Button>
+              </Link>
               <Link to={`/reviews/create?doc=${review.document_id}`} className="no-underline">
                 <Button variant="secondary">
                   <RefreshCw className="h-4 w-4" />

@@ -134,7 +134,7 @@ function buildPersonalityDesc(p: AgentTemplate['personality']): string {
   return traits.join('。')
 }
 
-function buildSystemPrompt(tpl: AgentTemplate): string {
+export function buildSystemPrompt(tpl: AgentTemplate): string {
   if (tpl.systemPrompt) return tpl.systemPrompt
 
   const personality = buildPersonalityDesc(tpl.personality)
@@ -284,7 +284,7 @@ export function createAgentFromTemplate(tpl: AgentTemplate, ownerId: string): Ag
 interface AgentState {
   agents: Agent[]
   templates: AgentTemplate[]
-  hiddenTemplateIds: string[]
+  templateVisibility: Record<string, boolean>
   trashedAgents: Agent[]
 
   addAgent: (agent: Agent) => void
@@ -293,8 +293,7 @@ interface AgentState {
   getAgent: (id: string) => Agent | undefined
   incrementUsage: (id: string) => void
 
-  hideTemplate: (id: string) => void
-  restoreTemplate: (id: string) => void
+  setTemplateVisibility: (id: string, visible: boolean) => void
 
   restoreAgent: (id: string) => void
   permanentlyDeleteAgent: (id: string) => void
@@ -305,7 +304,7 @@ export const useAgentStore = create<AgentState>()(
     (set, get) => ({
       agents: [],
       templates: PRESET_TEMPLATES,
-      hiddenTemplateIds: [],
+      templateVisibility: {},
       trashedAgents: [],
 
       addAgent: (agent) => {
@@ -347,15 +346,9 @@ export const useAgentStore = create<AgentState>()(
         }))
       },
 
-      hideTemplate: (id) => {
+      setTemplateVisibility: (id, visible) => {
         set((state) => ({
-          hiddenTemplateIds: [...state.hiddenTemplateIds, id],
-        }))
-      },
-
-      restoreTemplate: (id) => {
-        set((state) => ({
-          hiddenTemplateIds: state.hiddenTemplateIds.filter((x) => x !== id),
+          templateVisibility: { ...state.templateVisibility, [id]: visible },
         }))
       },
 
@@ -378,7 +371,7 @@ export const useAgentStore = create<AgentState>()(
       name: 'docmind-agents',
       partialize: (state) => ({
         agents: state.agents,
-        hiddenTemplateIds: state.hiddenTemplateIds,
+        templateVisibility: state.templateVisibility,
         trashedAgents: state.trashedAgents,
       }),
       merge: (persisted, current) => ({
