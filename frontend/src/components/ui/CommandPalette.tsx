@@ -20,7 +20,7 @@ const STATIC_COMMANDS: CommandItem[] = [
   { id: 'nav-documents', label: '文档中心', icon: FileText, path: '/documents', category: '导航' },
   { id: 'nav-agents', label: '角色工坊', icon: Bot, path: '/agents', category: '导航' },
   { id: 'nav-reviews', label: '评审大厅', icon: ClipboardCheck, path: '/reviews', category: '导航' },
-  { id: 'nav-chat', label: '聊天室', icon: MessageCircle, path: '/chat', category: '导航' },
+  { id: 'nav-chat', label: '研讨室', icon: MessageCircle, path: '/chat', category: '导航' },
   { id: 'nav-settings', label: '设置', icon: Settings, path: '/settings', category: '导航' },
 ]
 

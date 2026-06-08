@@ -37,7 +37,7 @@ const STEPS = [
   {
     icon: MessageCircle,
     title: '4. 角色辩论',
-    description: '评审完成后，你可以让角色们进入聊天室，围绕争议点展开辩论，深入探讨每个建议。',
+    description: '评审完成后，你可以让角色们进入研讨室，围绕争议点展开辩论，深入探讨每个建议。',
     color: 'bg-amber-50 text-amber-600',
   },
 ]

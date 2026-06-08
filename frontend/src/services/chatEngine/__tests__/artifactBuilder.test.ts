@@ -45,7 +45,7 @@ describe('discussion artifact builder', () => {
     ])
     const markdown = exportDiscussionArtifactAsMarkdown(artifact)
 
-    expect(markdown).toContain('# 聊天室讨论纪要')
+    expect(markdown).toContain('# 研讨室讨论纪要')
     expect(markdown).toContain('## 当前共识')
     expect(markdown).toContain('## 可执行建议')
   })

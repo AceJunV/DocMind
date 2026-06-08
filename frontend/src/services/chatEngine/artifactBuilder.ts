@@ -25,7 +25,7 @@ export function buildDiscussionArtifact(messages: ChatMessage[], now = new Date(
 
 export function exportDiscussionArtifactAsMarkdown(artifact: ChatDiscussionArtifact): string {
   return [
-    '# 聊天室讨论纪要',
+    '# 研讨室讨论纪要',
     '',
     formatSection('当前共识', artifact.consensus),
     formatSection('关键分歧', artifact.disagreements),

@@ -13,10 +13,10 @@ import {
   Sparkles,
   TriangleAlert,
   Users,
-  XCircle,
 } from 'lucide-react'
 import { AGENT_COLORS } from '@/stores/agentStore'
 import { useReviewStore } from '@/stores/reviewStore'
+import ChatRoomConfigModal from '@/components/ui/ChatRoomConfigModal'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/Toast'
 import { RadarChart } from '@/components/ui/RadarChart'
@@ -141,6 +141,7 @@ export default function ReviewDetailPage() {
   const [activeEvaluationView, setActiveEvaluationView] = useState<'primary' | 'auxiliary'>('primary')
   const [isTifenExpanded, setIsTifenExpanded] = useState(false)
   const [agentDimensionViews, setAgentDimensionViews] = useState<Record<string, 'primary' | 'auxiliary'>>({})
+  const [showCreateModal, setShowCreateModal] = useState(false)
   const agentReviews = useMemo(() => review?.agent_reviews || [], [review?.agent_reviews])
   const completedReviews = useMemo(
     () => agentReviews.filter((item) => item.status !== 'failed'),
@@ -570,7 +571,7 @@ export default function ReviewDetailPage() {
   }
 
   const handleCreateChat = () => {
-    navigate(`/chat?review=${review.id}`)
+    setShowCreateModal(true)
   }
 
   const renderAgentCards = (items: AgentReview[], title: string, icon: string) => {
@@ -735,10 +736,6 @@ export default function ReviewDetailPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button onClick={handleCreateChat}>
-                <MessageCircle className="h-4 w-4" />
-                教研研讨
-              </Button>
               <Button variant="secondary" onClick={handleExport}>
                 <Download className="h-4 w-4" />
                 下载 Markdown
@@ -1151,6 +1148,26 @@ export default function ReviewDetailPage() {
         </section>
       ) : null}
 
+      {/* 右侧浮动操作面板 */}
+      <div className="fixed right-5 top-24 z-40 hidden lg:block w-56">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-lg">
+          <p className="text-xs font-medium text-gray-500 mb-3">快速操作</p>
+          <Button onClick={handleCreateChat} className="w-full">
+            <MessageCircle className="h-4 w-4" />
+            进入研讨
+          </Button>
+        </div>
+      </div>
+
+      {showCreateModal && review && (
+        <ChatRoomConfigModal
+          review={review}
+          initialTopic={`关于《${review.document?.title || '文档'}》的评审讨论`}
+          initialAgentIds={review.agents?.map((a) => a.id) || []}
+          initialDiscussionMode="moderated"
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
     </div>
   )
 }

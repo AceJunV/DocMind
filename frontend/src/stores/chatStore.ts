@@ -82,7 +82,7 @@ export const useChatStore = create<ChatState>()(
         }))
         useActivityStore.getState().addActivity({
           type: 'chat',
-          text: `创建了聊天室《${normalizedRoom.topic}》`,
+          text: `创建了研讨室《${normalizedRoom.topic}》`,
         })
       },
 

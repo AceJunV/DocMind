@@ -94,7 +94,7 @@ export default function DashboardPage() {
     {
       label: '活跃研讨',
       value: rooms.filter((room) => room.status === 'active').length,
-      meta: `${rooms.length} 个聊天室`,
+      meta: `${rooms.length} 个研讨室`,
       icon: MessageCircle,
     },
     {
@@ -204,7 +204,7 @@ export default function DashboardPage() {
                 {user?.name || '体验用户'}，今天先处理最有价值的教学问题。
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-gray-600 sm:text-[15px]">
-                先上传教研案，再让不同角色从目标、难点、课堂节奏和学生理解这些角度给出更深的判断。完成评审后，可直接进入聊天室继续推进争议点。
+                先上传教研案，再让不同角色从目标、难点、课堂节奏和学生理解这些角度给出更深的判断。完成评审后，可直接进入研讨室继续推进争议点。
               </p>
             </div>
 
@@ -303,7 +303,7 @@ export default function DashboardPage() {
               <div className="px-6 py-10 text-center">
                 <Bot className="mx-auto mb-3 h-8 w-8 text-gray-300" />
                 <p className="text-sm text-gray-500">还没有角色使用数据</p>
-                <p className="mt-1 text-xs text-gray-400">发起评审或进入聊天室后，这里会显示最常用的角色。</p>
+                <p className="mt-1 text-xs text-gray-400">发起评审或进入研讨室后，这里会显示最常用的角色。</p>
               </div>
             ) : (
               <div className="divide-y divide-gray-100">

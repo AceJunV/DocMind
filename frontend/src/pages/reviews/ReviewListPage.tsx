@@ -62,7 +62,7 @@ export default function ReviewListPage() {
           </span>
           <h1 className="mt-3 text-3xl font-bold tracking-tight text-gray-900">评审大厅</h1>
           <p className="mt-2 max-w-2xl text-sm leading-7 text-gray-600">
-            所有评审记录都集中在这里。先看总体诊断，再进入报告页查看痛点、建议和角色分歧，必要时继续拉起聊天室深入讨论。
+            所有评审记录都集中在这里。先看总体诊断，再进入报告页查看痛点、建议和角色分歧，必要时继续拉起研讨室深入讨论。
           </p>
         </div>
 
@@ -80,7 +80,7 @@ export default function ReviewListPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">Review Snapshot</p>
             <h2 className="mt-2 text-2xl font-bold text-gray-900">把最近的教研判断整理成可继续行动的结果。</h2>
             <p className="mt-3 max-w-xl text-sm leading-7 text-gray-600">
-              完成态报告适合看诊断和建议，进行中报告适合观察模型输出是否稳定。所有后续聊天室都应该从这里出发，而不是脱离评审结果空聊。
+              完成态报告适合看诊断和建议，进行中报告适合观察模型输出是否稳定。所有后续研讨室都应该从这里出发，而不是脱离评审结果空聊。
             </p>
           </div>
         </div>

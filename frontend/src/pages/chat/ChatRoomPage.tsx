@@ -212,14 +212,14 @@ ${responseGuide}`
 function getRoomToneGuide(tone?: ChatRoomStrategy['roomTone']) {
   switch (tone) {
     case 'brainstorm':
-      return '\n聊天室气质：头脑风暴。允许提出新角度，但每次只贡献一个清晰想法。'
+      return '\n研讨室气质：头脑风暴。允许提出新角度，但每次只贡献一个清晰想法。'
     case 'teaching-seminar':
-      return '\n聊天室气质：教学研讨。优先围绕课堂实施、学生理解和可观察证据发言。'
+      return '\n研讨室气质：教学研讨。优先围绕课堂实施、学生理解和可观察证据发言。'
     case 'product-review':
-      return '\n聊天室气质：产品评审。优先围绕用户价值、流程阻力、风险和优先级发言。'
+      return '\n研讨室气质：产品评审。优先围绕用户价值、流程阻力、风险和优先级发言。'
     case 'review-meeting':
     default:
-      return '\n聊天室气质：专业评审会。观点要短、准、可追问，避免空泛表态。'
+      return '\n研讨室气质：专业评审会。观点要短、准、可追问，避免空泛表态。'
   }
 }
 
@@ -947,7 +947,7 @@ export default function ChatRoomPage() {
                 role: 'system',
                 content: [
                   validation.rewriteInstruction,
-                  '只输出重写后的聊天室发言，不要解释规则，不要保留越权判断。',
+                  '只输出重写后的研讨室发言，不要解释规则，不要保留越权判断。',
                 ].join('\n'),
               },
               { role: 'user', content: `原回复：\n${text}` },
@@ -1411,12 +1411,12 @@ export default function ChatRoomPage() {
     }
 
     if (participants.length === 0) {
-      toast('info', '请先邀请角色加入聊天室')
+      toast('info', '请先邀请角色加入研讨室')
       return
     }
 
     if (action.targetRole && !action.targetAgent) {
-      toast('info', '当前聊天室没有匹配的角色')
+      toast('info', '当前研讨室没有匹配的角色')
       return
     }
 
@@ -1621,7 +1621,7 @@ export default function ChatRoomPage() {
 
       addParticipant(id, agent)
       setShowInvite(false)
-      toast('success', `已邀请「${agent.name}」加入聊天室`)
+      toast('success', `已邀请「${agent.name}」加入研讨室`)
 
       addMessage(id, {
         id: createId(),
@@ -1629,7 +1629,7 @@ export default function ChatRoomPage() {
         sender_type: 'agent',
         sender_id: 'system',
         sender_name: '系统',
-        content: `${agent.avatar || ''} ${agent.name} 加入了聊天室`,
+        content: `${agent.avatar || ''} ${agent.name} 加入了研讨室`,
         created_at: new Date().toISOString(),
       })
 
@@ -1679,11 +1679,11 @@ export default function ChatRoomPage() {
     return (
       <div className="space-y-6 animate-slide-up">
         <Link to="/chat" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
-          <ArrowLeft className="h-4 w-4" /> 返回聊天室列表
+          <ArrowLeft className="h-4 w-4" /> 返回研讨室列表
         </Link>
         <div className="rounded-xl border border-gray-200 bg-white py-16 text-center">
           <MessageCircle className="mx-auto mb-3 h-12 w-12 text-gray-300" />
-          <p className="font-medium text-gray-500">聊天室不存在</p>
+          <p className="font-medium text-gray-500">研讨室不存在</p>
           <Link to="/chat" className="mt-4 inline-block rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 no-underline">
             返回列表
           </Link>
@@ -1696,7 +1696,7 @@ export default function ChatRoomPage() {
     <div className="flex min-h-0 flex-col animate-slide-up" style={{ height: 'calc(100vh - 112px)' }}>
       <div className="mb-4 flex shrink-0 items-center justify-between">
         <Link to="/chat" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
-          <ArrowLeft className="h-4 w-4" /> 返回聊天室列表
+          <ArrowLeft className="h-4 w-4" /> 返回研讨室列表
         </Link>
         <div className="flex items-center gap-2">
           <button
@@ -1725,7 +1725,7 @@ export default function ChatRoomPage() {
               onClick={() => setConfirmClose(true)}
               className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 cursor-pointer"
             >
-              关闭聊天室
+              关闭研讨室
             </button>
           ) : null}
           <button
@@ -1739,27 +1739,27 @@ export default function ChatRoomPage() {
 
       <ConfirmDialog
         open={confirmDelete}
-        title="确认删除聊天室？"
+        title="确认删除研讨室？"
         description={`确定要删除「${room.topic}」吗？所有消息记录都会被永久删除。`}
         confirmText="删除"
         variant="danger"
         onConfirm={() => {
           removeRoom(id!)
           navigate('/chat')
-          toast('success', '聊天室已删除')
+          toast('success', '研讨室已删除')
         }}
         onCancel={() => setConfirmDelete(false)}
       />
 
       <ConfirmDialog
         open={confirmClose}
-        title="关闭聊天室？"
+        title="关闭研讨室？"
         description="关闭后角色将不再主动回复，但历史消息会保留。"
         confirmText="关闭"
         onConfirm={() => {
           closeRoom(id!)
           setConfirmClose(false)
-          toast('info', '聊天室已关闭')
+          toast('info', '研讨室已关闭')
         }}
         onCancel={() => setConfirmClose(false)}
       />
@@ -2090,7 +2090,7 @@ export default function ChatRoomPage() {
 
           <div className="border-t border-gray-100 bg-white/95 px-5 py-4 backdrop-blur">
             {room.status === 'closed' ? (
-              <p className="text-center text-sm text-gray-500">此聊天室已关闭</p>
+              <p className="text-center text-sm text-gray-500">此研讨室已关闭</p>
             ) : (
               <div className="relative">
                 {slashQuery !== null ? (

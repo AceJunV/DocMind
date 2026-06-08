@@ -1127,7 +1127,7 @@ export default function ReviewCreatePage() {
           </span>
           <h1 className="mt-3 text-3xl font-bold tracking-tight text-gray-900">发起评审</h1>
           <p className="mt-2 max-w-3xl text-sm leading-7 text-gray-600">
-            先选文档，再选角色。评审生成后会进入新的报告结构，并可继续拉起聊天室围绕共识、分歧和建议展开讨论。
+            先选文档，再选角色。评审生成后会进入新的报告结构，并可继续拉起研讨室围绕共识、分歧和建议展开讨论。
           </p>
         </div>
       </div>

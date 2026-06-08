@@ -335,7 +335,7 @@ export default function DocumentDetailPage() {
         <Card className="rounded-[28px]">
           <CardHeader className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-gray-900">关联聊天室</h2>
+              <h2 className="text-sm font-semibold text-gray-900">关联研讨室</h2>
               <p className="mt-1 text-xs text-gray-500">展示和该文档有关的讨论房间，便于从文档继续追踪讨论。</p>
             </div>
           </CardHeader>
@@ -343,8 +343,8 @@ export default function DocumentDetailPage() {
             {chatRoomsForDocument.length === 0 ? (
               <div className="py-8 text-center">
                 <MessageCircle className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-                <p className="text-sm text-gray-500">还没有关联聊天室</p>
-                <p className="mt-1 text-xs text-gray-400">从评审页发起聊天室后，这里会自动汇总展示。</p>
+                <p className="text-sm text-gray-500">还没有关联研讨室</p>
+                <p className="mt-1 text-xs text-gray-400">从评审页发起研讨室后，这里会自动汇总展示。</p>
               </div>
             ) : (
               <div className="space-y-3">
