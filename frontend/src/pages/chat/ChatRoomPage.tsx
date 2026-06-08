@@ -376,6 +376,7 @@ function buildAgendaFromContext(
   review: Review | null | undefined,
   topicTags: string[] | undefined,
   mode: DiscussionMode,
+  bookmarkAgenda?: string,
 ) {
   const userTopic = roomTopic.trim() || '自由讨论'
   if (mode === 'free') {
@@ -388,6 +389,30 @@ function buildAgendaFromContext(
         status: 'active' as const,
       },
     ] satisfies ChatAgendaItem[]
+  }
+
+  if (bookmarkAgenda) {
+    const lines = bookmarkAgenda.split('\n').filter(Boolean)
+    const agendaItems: ChatAgendaItem[] = []
+    let first = true
+    for (const line of lines) {
+      const text = line.replace(/^[^\s]+\s/, '')
+      const colonIdx = text.indexOf('：')
+      const contents = colonIdx >= 0
+        ? text.slice(colonIdx + 1).split('；').map((s) => s.trim()).filter(Boolean)
+        : [text]
+      for (const content of contents) {
+        agendaItems.push({
+          id: `agenda-${createId()}`,
+          text: content,
+          source: 'user' as const,
+          priority: 5,
+          status: first ? 'active' as const : 'pending' as const,
+        })
+        first = false
+      }
+    }
+    return agendaItems satisfies ChatAgendaItem[]
   }
 
   const topicPool = new TopicPool()
@@ -862,7 +887,7 @@ export default function ChatRoomPage() {
     if (!id || !room) return
     if ((room.pendingTopics || []).length > 0) return
 
-    const agendaItems = buildAgendaFromContext(room.topic, doc, review, room.topicTags, discussionMode)
+    const agendaItems = buildAgendaFromContext(room.topic, doc, review, room.topicTags, discussionMode, room.bookmarkAgenda)
     setAgenda(id, agendaItems, agendaItems[0]?.id)
   }, [discussionMode, doc, id, review, room, setAgenda])
 
@@ -1673,7 +1698,7 @@ export default function ChatRoomPage() {
   )
 
   const availableToInvite = allAgents.filter((agent) => !participants.some((item) => item.id === agent.id))
-  const hasDocumentPanel = Boolean(showDoc && doc)
+  const hasDocumentPanel = true
 
   if (!room) {
     return (
@@ -1800,43 +1825,14 @@ export default function ChatRoomPage() {
       ) : null}
 
       <div
-        className={cn(
-          'grid min-h-0 flex-1 grid-cols-1 gap-4',
-          hasDocumentPanel ? 'lg:grid-cols-[300px_minmax(0,1fr)]' : 'lg:grid-cols-1',
-        )}
+        className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]"
       >
-        {showDoc && doc ? (
-          <aside className="hidden min-h-0 flex-col gap-3 lg:flex">
-            <div className="flex min-h-0 max-h-[38%] flex-col rounded-2xl border border-gray-200 bg-white/90 shadow-sm">
-              <div className="border-b border-gray-100 px-4 py-3">
-                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
-                <FileText className="h-4 w-4 text-primary-500" /> 文档预览
-              </h3>
-                <p className="mt-2 line-clamp-2 text-sm font-medium text-gray-800">{doc.title}</p>
-              </div>
-              <div className="flex-1 overflow-y-auto px-4 py-4">
-                <div className="rounded-xl bg-gray-50 p-3 text-xs leading-6 text-gray-600">
-                  {buildDocumentSnippet(doc, 900)}...
-                </div>
-              </div>
-            </div>
-
-            {review?.summary ? (
-              <div className="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm">
-                <h3 className="mb-3 text-sm font-semibold text-gray-900">评审焦点</h3>
-                <div className="space-y-2 text-xs text-gray-600">
-                  {(review.summary.pain_points || review.summary.consensus || []).slice(0, 4).map((item) => (
-                    <p key={item}>{item}</p>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
+        <aside className="hidden min-h-0 flex-col gap-3 lg:flex">
             {agenda.length > 0 ? (
               <div className="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm">
                 <h3 className="mb-3 text-sm font-semibold text-gray-900">讨论议程</h3>
                 <div className="space-y-2">
-                  {agenda.slice(0, 5).map((topic) => (
+                  {agenda.map((topic) => (
                     <div
                       key={topic.id}
                       className={cn(
@@ -1874,7 +1870,6 @@ export default function ChatRoomPage() {
               </div>
             </div>
           </aside>
-        ) : null}
 
         <main className="relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">

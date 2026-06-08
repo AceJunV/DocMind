@@ -252,6 +252,7 @@ export interface ChatRoom {
   currentTopicId?: string
   pendingTopics?: ChatAgendaItem[]
   topicTags?: string[]
+  bookmarkAgenda?: string
   stats?: {
     messageCount: number
     lastActiveAt?: string
@@ -400,4 +401,25 @@ export interface SavedModelProfile {
   name: string
   config: ModelConfig
   savedAt: string
+}
+
+export type BookmarkCategory = '痛点' | '亮点' | '疑问' | '建议' | '其他'
+
+export const BOOKMARK_CATEGORY_CONFIG: Record<BookmarkCategory, { icon: string; color: string; bgColor: string; borderColor: string }> = {
+  '痛点': { icon: '📌', color: 'text-red-600', bgColor: 'bg-red-50', borderColor: 'border-l-red-400' },
+  '亮点': { icon: '✨', color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-l-emerald-400' },
+  '疑问': { icon: '❓', color: 'text-blue-600', bgColor: 'bg-blue-50', borderColor: 'border-l-blue-400' },
+  '建议': { icon: '💡', color: 'text-purple-600', bgColor: 'bg-purple-50', borderColor: 'border-l-purple-400' },
+  '其他': { icon: '📝', color: 'text-gray-600', bgColor: 'bg-gray-50', borderColor: 'border-l-gray-400' },
+}
+
+export interface ReviewBookmark {
+  id: string
+  reviewId: string
+  content: string
+  fullContent: string
+  category: BookmarkCategory
+  section: string
+  discussed?: boolean
+  createdAt: string
 }

@@ -17,11 +17,14 @@ import {
 import { AGENT_COLORS } from '@/stores/agentStore'
 import { useReviewStore } from '@/stores/reviewStore'
 import ChatRoomConfigModal from '@/components/ui/ChatRoomConfigModal'
+import BookmarkableParagraph from '@/components/ui/BookmarkableParagraph'
+import FloatingBookmarkPanel from '@/components/ui/FloatingBookmarkPanel'
+import { useReviewBookmarkStore } from '@/stores/reviewBookmarkStore'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/Toast'
 import { RadarChart } from '@/components/ui/RadarChart'
-import { TEACHING_DIMENSIONS, TEACHING_EVAL_DIMENSIONS } from '@/types'
-import type { AgentReview, Suggestion } from '@/types'
+import { TEACHING_DIMENSIONS, TEACHING_EVAL_DIMENSIONS, BOOKMARK_CATEGORY_CONFIG } from '@/types'
+import type { AgentReview, Suggestion, BookmarkCategory } from '@/types'
 import { buildFallbackTifenReport } from '@/services/teachingPrompts'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -32,6 +35,8 @@ const PRIORITY_STYLES = {
   medium: { label: '中优先', badge: 'warning' as const, color: 'bg-amber-50 text-amber-600 border-amber-200' },
   low: { label: '低优先', badge: 'success' as const, color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
 } as const
+
+const BOOKMARK_CATEGORY_KEYS = Object.keys(BOOKMARK_CATEGORY_CONFIG) as BookmarkCategory[]
 
 function buildSuggestionKey(suggestion: Suggestion) {
   return `${suggestion.title || ''}|${suggestion.content}`.toLowerCase().replace(/\s+/g, '')
@@ -142,6 +147,18 @@ export default function ReviewDetailPage() {
   const [isTifenExpanded, setIsTifenExpanded] = useState(false)
   const [agentDimensionViews, setAgentDimensionViews] = useState<Record<string, 'primary' | 'auxiliary'>>({})
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const bookmarkList = useReviewBookmarkStore((s) => s.bookmarks[review?.id || ''])
+  const agendaText = useMemo(() => {
+    if (!bookmarkList || bookmarkList.length === 0) return undefined
+    const activeItems = bookmarkList.filter((b) => !b.discussed)
+    if (activeItems.length === 0) return undefined
+    return BOOKMARK_CATEGORY_KEYS.map((cat) => {
+      const items = activeItems.filter((b) => b.category === cat)
+      if (items.length === 0) return ''
+      const config = BOOKMARK_CATEGORY_CONFIG[cat]
+      return `${config.icon} ${cat}：${items.map((b) => b.fullContent).join('；')}`
+    }).filter(Boolean).join('\n')
+  }, [bookmarkList])
   const agentReviews = useMemo(() => review?.agent_reviews || [], [review?.agent_reviews])
   const completedReviews = useMemo(
     () => agentReviews.filter((item) => item.status !== 'failed'),
@@ -636,14 +653,14 @@ export default function ReviewDetailPage() {
                     </div>
                   </div>
 
-                  <p className="mb-4 whitespace-pre-wrap text-sm leading-7 text-gray-700">{item.opinion}</p>
+                  <BookmarkableParagraph reviewId={review.id} section={`${item.agent_name}观点`} content={item.opinion} className="mb-4 whitespace-pre-wrap text-sm leading-7 text-gray-700" />
 
                   {item.highlights?.length ? (
                     <div className="mb-4 rounded-2xl border border-primary-100 bg-primary-50/70 p-4">
                       <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">角色提炼亮点</p>
                       <div className="space-y-1.5">
                         {item.highlights.slice(0, 3).map((highlight) => (
-                          <p key={highlight} className="text-sm text-gray-700">{highlight}</p>
+                          <BookmarkableParagraph key={highlight} reviewId={review.id} section={`${item.agent_name}亮点`} content={highlight} className="text-sm text-gray-700" />
                         ))}
                       </div>
                     </div>
@@ -694,11 +711,11 @@ export default function ReviewDetailPage() {
                             style={{ width: `${dimension.score * 20}%`, backgroundColor: AGENT_COLORS[item.agent_color] }}
                           />
                         </div>
-                        {dimension.comment ? <p className="text-xs leading-6 text-gray-600">{dimension.comment}</p> : null}
+                        {dimension.comment ? <BookmarkableParagraph reviewId={review.id} section={`${item.agent_name}维度评论`} content={dimension.comment} className="text-xs leading-6 text-gray-600" /> : null}
                         {dimension.evidence ? (
                           <div className="mt-3 rounded-xl border border-primary-100 bg-white px-3 py-2">
                             <p className="text-[11px] font-semibold text-primary-600">引用原文</p>
-                            <p className="mt-1 text-xs leading-5 text-gray-700">{dimension.evidence}</p>
+                            <BookmarkableParagraph reviewId={review.id} section={`${item.agent_name}引用`} content={dimension.evidence} className="mt-1 text-xs leading-5 text-gray-700" />
                           </div>
                         ) : null}
                       </div>
@@ -766,7 +783,7 @@ export default function ReviewDetailPage() {
           {summary?.overview ? (
             <div className="rounded-[24px] border border-primary-100 bg-white/76 px-5 py-4 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">总体诊断</p>
-              <p className="mt-2 text-sm leading-7 text-gray-700">{summary.overview}</p>
+              <BookmarkableParagraph reviewId={review.id} section="总体诊断" content={summary.overview} className="mt-2 text-sm leading-7 text-gray-700" />
             </div>
           ) : null}
         </div>
@@ -788,7 +805,7 @@ export default function ReviewDetailPage() {
               <p className="mb-3 text-sm font-semibold text-amber-700">3 个核心问题</p>
               <div className="space-y-2">
                 {(painPoints.length ? painPoints.slice(0, 3) : ['暂无明确痛点汇总']).map((item, index) => (
-                  <p key={item} className="text-sm leading-7 text-gray-700">{index + 1}. {item}</p>
+                  <BookmarkableParagraph key={item} reviewId={review.id} section="核心痛点" content={`${index + 1}. ${item}`} className="text-sm leading-7 text-gray-700" />
                 ))}
               </div>
             </div>
@@ -796,7 +813,7 @@ export default function ReviewDetailPage() {
               <p className="mb-3 text-sm font-semibold text-emerald-700">2-3 个保留亮点</p>
               <div className="space-y-2">
                 {(strengths.length ? strengths.slice(0, 3) : ['暂无明确亮点汇总']).map((item, index) => (
-                  <p key={item} className="text-sm leading-7 text-gray-700">{index + 1}. {item}</p>
+                  <BookmarkableParagraph key={item} reviewId={review.id} section="核心亮点" content={`${index + 1}. ${item}`} className="text-sm leading-7 text-gray-700" />
                 ))}
               </div>
             </div>
@@ -837,7 +854,7 @@ export default function ReviewDetailPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500">Quick Read</p>
                   <div className="mt-3 space-y-2">
                     {(painPoints.slice(0, 2).length ? painPoints.slice(0, 2) : ['当前报告已经生成，可继续查看下方建议与分角色判断。']).map((item) => (
-                      <p key={item} className="text-sm leading-7 text-gray-700">{item}</p>
+                      <BookmarkableParagraph key={item} reviewId={review.id} section="Quick Read" content={item} className="text-sm leading-7 text-gray-700" />
                     ))}
                   </div>
                 </div>
@@ -974,9 +991,7 @@ export default function ReviewDetailPage() {
                     <h3 className="text-sm font-semibold text-gray-950">{section.title}</h3>
                     <div className="mt-2 space-y-2">
                       {section.paragraphs.length > 0 ? section.paragraphs.map((paragraph) => (
-                        <p key={paragraph} className="text-[15px] leading-8 text-gray-700">
-                          {paragraph}
-                        </p>
+                        <BookmarkableParagraph key={paragraph} reviewId={review.id} section={`提分：${section.title}`} content={paragraph} className="text-[15px] leading-8 text-gray-700" />
                       )) : (
                         <p className="text-[15px] leading-8 text-gray-500">暂无展开说明。</p>
                       )}
@@ -1033,7 +1048,7 @@ export default function ReviewDetailPage() {
             </h2>
             <div className="space-y-2">
               {(painPoints.length ? painPoints : ['暂无明确痛点汇总']).map((item) => (
-                <p key={item} className="text-sm leading-7 text-gray-700">{item}</p>
+                <BookmarkableParagraph key={item} reviewId={review.id} section="关键痛点" content={item} className="text-sm leading-7 text-gray-700" />
               ))}
             </div>
           </CardContent>
@@ -1050,7 +1065,7 @@ export default function ReviewDetailPage() {
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">共识</p>
                 <div className="space-y-1.5">
                   {(consensus.length ? consensus : ['暂无明显共识']).map((item) => (
-                    <p key={item} className="text-sm leading-6 text-gray-700">{item}</p>
+                    <BookmarkableParagraph key={item} reviewId={review.id} section="共识" content={item} className="text-sm leading-6 text-gray-700" />
                   ))}
                 </div>
               </div>
@@ -1060,7 +1075,7 @@ export default function ReviewDetailPage() {
                   {(controversies.length
                     ? controversies.map((item) => `${item.topic}：${item.opinions.map((opinion) => `${opinion.agent_name}认为${opinion.stance}`).join('；')}`)
                     : ['暂无明显争议']).map((item) => (
-                    <p key={item} className="text-sm leading-6 text-gray-700">{item}</p>
+                    <BookmarkableParagraph key={item} reviewId={review.id} section="争议" content={item} className="text-sm leading-6 text-gray-700" />
                   ))}
                 </div>
               </div>
@@ -1099,21 +1114,19 @@ export default function ReviewDetailPage() {
                         <Badge variant={priority.badge}>{priority.label}</Badge>
                       </div>
 
-                      <p className={cn('text-sm leading-7 text-gray-700', suggestion.adopted && 'line-through text-gray-400')}>
-                        {suggestion.content}
-                      </p>
+                      <BookmarkableParagraph reviewId={review.id} section="优化建议" content={suggestion.content} className={cn('text-sm leading-7 text-gray-700', suggestion.adopted && 'line-through text-gray-400')} />
 
                       {suggestion.evidence ? (
                         <div className="mt-3 rounded-2xl bg-gray-50 p-3">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500">引用原文</p>
-                          <p className="mt-1 text-sm leading-7 text-gray-700">{suggestion.evidence}</p>
+                          <BookmarkableParagraph reviewId={review.id} section="建议引用" content={suggestion.evidence} className="mt-1 text-sm leading-7 text-gray-700" />
                         </div>
                       ) : null}
 
                       {suggestion.expected_effect ? (
                         <div className="mt-3 rounded-2xl bg-primary-50 p-3">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-primary-600">预期收益</p>
-                          <p className="mt-1 text-sm leading-7 text-gray-700">{suggestion.expected_effect}</p>
+                          <BookmarkableParagraph reviewId={review.id} section="建议收益" content={suggestion.expected_effect} className="mt-1 text-sm leading-7 text-gray-700" />
                         </div>
                       ) : null}
 
@@ -1149,15 +1162,7 @@ export default function ReviewDetailPage() {
       ) : null}
 
       {/* 右侧浮动操作面板 */}
-      <div className="fixed right-5 top-24 z-40 hidden lg:block w-56">
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-lg">
-          <p className="text-xs font-medium text-gray-500 mb-3">快速操作</p>
-          <Button onClick={handleCreateChat} className="w-full">
-            <MessageCircle className="h-4 w-4" />
-            进入研讨
-          </Button>
-        </div>
-      </div>
+      <FloatingBookmarkPanel reviewId={review.id} onEnterChat={handleCreateChat} />
 
       {showCreateModal && review && (
         <ChatRoomConfigModal
@@ -1165,6 +1170,7 @@ export default function ReviewDetailPage() {
           initialTopic={`关于《${review.document?.title || '文档'}》的评审讨论`}
           initialAgentIds={review.agents?.map((a) => a.id) || []}
           initialDiscussionMode="moderated"
+          agendaText={agendaText}
           onClose={() => setShowCreateModal(false)}
         />
       )}

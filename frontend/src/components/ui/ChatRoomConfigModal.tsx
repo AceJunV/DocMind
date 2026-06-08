@@ -9,6 +9,7 @@ import { useAgentStore } from '@/stores/agentStore'
 import { toast } from '@/components/ui/Toast'
 import { createId } from '@/utils/id'
 import { DEFAULT_CHAT_ROOM_STRATEGY } from '@/types'
+import { useReviewBookmarkStore } from '@/stores/reviewBookmarkStore'
 import type { ChatRoom, DiscussionMode, ContextDepth, InitiativeLevel, ConflictLevel, RoomTone, FeedbackLevel, Review } from '@/types'
 
 const CONTEXT_DEPTH_OPTIONS: Array<{ value: ContextDepth; label: string }> = [
@@ -46,6 +47,7 @@ interface Props {
   initialTopic?: string
   initialAgentIds?: string[]
   initialDiscussionMode?: DiscussionMode
+  agendaText?: string
   onClose: () => void
 }
 
@@ -54,12 +56,14 @@ export default function ChatRoomConfigModal({
   initialTopic = '',
   initialAgentIds = [],
   initialDiscussionMode = 'free',
+  agendaText,
   onClose,
 }: Props) {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const createRoom = useChatStore((s) => s.createRoom)
   const addMessage = useChatStore((s) => s.addMessage)
+  const markAsDiscussed = useReviewBookmarkStore((s) => s.markAsDiscussed)
   const agents = useAgentStore((s) => s.agents)
   const templates = useAgentStore((s) => s.templates)
   const templateVisibility = useAgentStore((s) => s.templateVisibility)
@@ -154,6 +158,7 @@ export default function ChatRoomConfigModal({
             ...(review.summary?.top_suggestions?.map((item) => item.title || item.content) || []),
           ].slice(0, 5)
         : undefined,
+      bookmarkAgenda: agendaText || undefined,
       created_at: new Date().toISOString(),
     }
     createRoom(room)
@@ -171,6 +176,9 @@ export default function ChatRoomConfigModal({
             : `讨论群已建好（${modeLabel}讨论模式）。${participants.map((a) => `${a.avatar || ''} ${a.name}`).join('、')} 已加入，大家正在热身中...`,
       created_at: new Date().toISOString(),
     })
+    if (agendaText && review?.id) {
+      markAsDiscussed(review.id)
+    }
     onClose()
     navigate(`/chat/${room.id}`)
   }
