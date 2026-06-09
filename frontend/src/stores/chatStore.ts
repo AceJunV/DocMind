@@ -47,6 +47,8 @@ interface ChatState {
   setAgenda: (roomId: string, agenda: ChatAgendaItem[], currentTopicId?: string) => void
   activateAgendaTopic: (roomId: string, topicId: string) => void
   completeAgendaTopic: (roomId: string, topicId: string, nextTopicId?: string) => void
+  markTopicDone: (roomId: string, topicId: string) => void
+  resetCurrentTopic: (roomId: string) => void
 }
 
 function normalizeRoom(room: ChatRoom): ChatRoom {
@@ -311,6 +313,40 @@ export const useChatStore = create<ChatState>()(
                     ...topic,
                     status: topic.id === topicId ? 'done' : topic.id === nextTopicId ? 'active' : topic.status,
                   })),
+                }
+              : room
+          ),
+        }))
+      },
+
+      markTopicDone: (roomId, topicId) => {
+        set((state) => ({
+          rooms: state.rooms.map((room) =>
+            room.id === roomId
+              ? {
+                  ...room,
+                  currentTopicId: undefined,
+                  pendingTopics: (room.pendingTopics || []).map((topic) => ({
+                    ...topic,
+                    status: topic.id === topicId ? 'done' : topic.status,
+                  })),
+                }
+              : room
+          ),
+        }))
+      },
+
+      resetCurrentTopic: (roomId) => {
+        set((state) => ({
+          rooms: state.rooms.map((room) =>
+            room.id === roomId
+              ? {
+                  ...room,
+                  pendingTopics: (room.pendingTopics || []).map((topic) => ({
+                    ...topic,
+                    status: topic.status === 'active' ? 'pending' as const : topic.status,
+                  })),
+                  currentTopicId: undefined,
                 }
               : room
           ),

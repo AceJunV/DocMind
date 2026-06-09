@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { Star, Check } from 'lucide-react'
+import { Star, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useReviewBookmarkStore } from '@/stores/reviewBookmarkStore'
 import { BOOKMARK_CATEGORY_CONFIG } from '@/types'
@@ -99,19 +99,18 @@ export default function BookmarkableParagraph({ reviewId, section, content, clas
           )}
           title={isDiscussed ? '已讨论' : existingBookmark ? '取消标记' : '标记此段落'}
         >
-          <span className="relative inline-block">
-            <Star
-              className={cn(
-                'h-3.5 w-3.5',
-                isDiscussed
-                  ? 'fill-amber-400 text-amber-400'
-                  : existingBookmark
+          <span className="relative inline-flex items-center justify-center">
+            {isDiscussed ? (
+              <CheckCircle className="h-4 w-4 fill-green-500 text-white" strokeWidth={2} />
+            ) : (
+              <Star
+                className={cn(
+                  'h-3.5 w-3.5',
+                  existingBookmark
                     ? 'fill-amber-400 text-amber-400'
                     : 'text-gray-300 hover:text-amber-400'
-              )}
-            />
-            {isDiscussed && (
-              <Check className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 fill-green-500 text-white" strokeWidth={3} />
+                )}
+              />
             )}
           </span>
         </button>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { MessageCircle, Clock, Users, ArrowRight, Plus, MoreHorizontal, Trash2, XCircle } from 'lucide-react'
+import { MessageCircle, Clock, Users, ArrowRight, Plus, MoreHorizontal, Trash2, XCircle, HelpCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AGENT_COLORS } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
@@ -26,6 +26,7 @@ export default function ChatListPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ChatRoom | null>(null)
+  const [agendaTooltipId, setAgendaTooltipId] = useState<string | null>(null)
   const handledReviewRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -145,6 +146,28 @@ export default function ChatListPage() {
                             room.discussionMode === 'debate' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
                           )}>
                             {room.discussionMode === 'debate' ? '辩论' : '引导'}
+                          </span>
+                        )}
+                        {(room.bookmarkAgenda || (room.pendingTopics && room.pendingTopics.length > 0)) && (
+                          <span
+                            className="relative pointer-events-auto"
+                            onMouseEnter={() => setAgendaTooltipId(room.id)}
+                            onMouseLeave={() => setAgendaTooltipId(null)}
+                          >
+                            <HelpCircle className="h-4 w-4 text-gray-400 hover:text-primary-500 cursor-help" />
+                            {agendaTooltipId === room.id && (
+                              <span className="absolute left-full top-0 ml-2 z-50 w-80 max-h-48 overflow-hidden rounded-lg border border-gray-200 bg-white p-3 shadow-lg text-xs text-gray-700 leading-relaxed pointer-events-auto">
+                                <div className="animate-scroll-up">
+                                  {(() => {
+                                    const items = room.bookmarkAgenda
+                                      ? room.bookmarkAgenda.split('\n')
+                                      : room.pendingTopics?.map((t) => t.text) || []
+                                    const lines = items.map((line, i) => <p key={i} className="flex gap-1.5"><span className="shrink-0 text-primary-600 font-medium">{i + 1}.</span><span>{line}</span></p>)
+                                    return <>{lines}{lines}</>
+                                  })()}
+                                </div>
+                              </span>
+                            )}
                           </span>
                         )}
                       </div>

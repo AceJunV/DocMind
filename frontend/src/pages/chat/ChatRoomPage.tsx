@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { createPortal } from 'react-dom'
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   ArrowLeft,
   Send,
@@ -386,33 +387,20 @@ function buildAgendaFromContext(
         text: userTopic,
         source: 'user' as const,
         priority: 1,
-        status: 'active' as const,
+        status: 'pending' as const,
       },
     ] satisfies ChatAgendaItem[]
   }
 
   if (bookmarkAgenda) {
     const lines = bookmarkAgenda.split('\n').filter(Boolean)
-    const agendaItems: ChatAgendaItem[] = []
-    let first = true
-    for (const line of lines) {
-      const text = line.replace(/^[^\s]+\s/, '')
-      const colonIdx = text.indexOf('：')
-      const contents = colonIdx >= 0
-        ? text.slice(colonIdx + 1).split('；').map((s) => s.trim()).filter(Boolean)
-        : [text]
-      for (const content of contents) {
-        agendaItems.push({
-          id: `agenda-${createId()}`,
-          text: content,
-          source: 'user' as const,
-          priority: 5,
-          status: first ? 'active' as const : 'pending' as const,
-        })
-        first = false
-      }
-    }
-    return agendaItems satisfies ChatAgendaItem[]
+    return lines.map((text) => ({
+      id: `agenda-${createId()}`,
+      text: text.replace(/^[^\s]+\s/, '').replace(/^[^：]+：/, ''),
+      source: 'user' as const,
+      priority: 5,
+      status: 'pending' as const,
+    })) satisfies ChatAgendaItem[]
   }
 
   const topicPool = new TopicPool()
@@ -428,17 +416,17 @@ function buildAgendaFromContext(
         text: userTopic,
         source: 'user' as const,
         priority: 1,
-        status: 'active' as const,
+        status: 'pending' as const,
       },
     ] satisfies ChatAgendaItem[]
   }
 
-  return seededTopics.map((topic, index) => ({
+  return seededTopics.map((topic) => ({
     id: topic.id,
     text: topic.text,
     source: topic.source,
     priority: topic.priority,
-    status: index === 0 ? 'active' : 'pending',
+    status: 'pending' as const,
   })) satisfies ChatAgendaItem[]
 }
 
@@ -769,6 +757,8 @@ function getFeedbackToneClass(tone: 'neutral' | 'document' | 'evidence' | 'confl
 export default function ChatRoomPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const backUrl = (location.state as { from?: string })?.from || '/chat'
   const { user } = useAuthStore()
   const room = useChatStore((state) => state.rooms.find((item) => item.id === id))
   const messagesMap = useChatStore((state) => state.messages)
@@ -782,6 +772,8 @@ export default function ChatRoomPage() {
   const setAgenda = useChatStore((state) => state.setAgenda)
   const activateAgendaTopic = useChatStore((state) => state.activateAgendaTopic)
   const completeAgendaTopic = useChatStore((state) => state.completeAgendaTopic)
+  const markTopicDone = useChatStore((state) => state.markTopicDone)
+  const resetCurrentTopic = useChatStore((state) => state.resetCurrentTopic)
   const addBookmarkFn = useChatStore((state) => state.addBookmark)
   const removeBookmarkFn = useChatStore((state) => state.removeBookmark)
   const addReaction = useChatStore((state) => state.addReaction)
@@ -811,6 +803,9 @@ export default function ChatRoomPage() {
   const [pendingAttachment, setPendingAttachment] = useState<ChatMessageAttachment | null>(null)
   const [showSearch, setShowSearch] = useState(false)
   const [showBookmarks, setShowBookmarks] = useState(false)
+  const [agendaTooltipId, setAgendaTooltipId] = useState<string | null>(null)
+  const [agendaTooltipStyle, setAgendaTooltipStyle] = useState<React.CSSProperties>({})
+  const agendaTooltipRef = useRef<HTMLDivElement>(null)
   const [showSummary, setShowSummary] = useState(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -1262,18 +1257,11 @@ export default function ChatRoomPage() {
           outputWasRewritten: Boolean(fallbackReply.outputWasRewritten),
         })
       }
-
-      if (id && topic?.id) {
-        const nextTopic = agenda.find((item) => item.status === 'pending' && item.id !== topic.id)
-        completeAgendaTopic(id, topic.id, nextTopic?.id)
-        updateDiscussionState(id, nextTopic ? 'discussing' : 'summarizing')
-      }
   }, [
     activateAgendaTopic,
     addAgentMsg,
     agenda,
     capabilityProfiles,
-    completeAgendaTopic,
     discussionMode,
     getAgentReply,
     getEventInstruction,
@@ -1284,41 +1272,54 @@ export default function ChatRoomPage() {
     updateDiscussionState,
   ])
 
-  useEffect(() => {
-    if (!id || !room || !hasValidConfig) return
-    if (participants.length === 0) return
+const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
+    if (!id) return
+    const currentActive = agenda.find((t) => t.status === 'active')
+    if (currentActive && currentActive.id === topic.id) return
 
-    const agentMessages = messages.filter((message) => message.sender_type === 'agent' && message.sender_id !== 'system')
-    if (agentMessages.length > 0 || loading) return
-
-    const activeTopic = currentTopic || agenda.find((topic) => topic.status === 'active') || null
-    const kickoffKey = `${id}:${activeTopic?.id || 'room'}`
-    if (kickoffSeedRef.current === kickoffKey) return
-
-    if (discussionMode === 'free') {
-      kickoffSeedRef.current = kickoffKey
-      return
+    if (currentActive) {
+      resetCurrentTopic(id)
+      addMessage(id, {
+        id: createId(),
+        room_id: id,
+        sender_type: 'user',
+        sender_id: user?.id || '',
+        sender_name: user?.name || '我',
+        content: `「${currentActive.text}」议题我们先放一放，我们先研讨「${topic.text}」议题。`,
+        created_at: new Date().toISOString(),
+      })
     }
 
-    kickoffSeedRef.current = kickoffKey
-    const timer = window.setTimeout(() => {
-      if (abortRef.current?.signal.aborted) return
-      const seedText = activeTopic?.text || room.topic
-      void runDiscussionRound(
-        [
-          createVirtualUserMessage(
-            doc
-              ? `请围绕“${seedText}”直接开始讨论，结合文档《${doc.title}》和评审结论给出明确判断。`
-              : `请围绕“${seedText}”直接开始讨论，像真实教研群一样先抛出一个具体判断。`
-          ),
-        ],
-        undefined,
-        activeTopic,
-      )
-    }, 900)
+    activateAgendaTopic(id, topic.id)
+    const seedText = topic.text || room?.topic || '自由讨论'
+    addMessage(id, {
+      id: createId(),
+      room_id: id,
+      sender_type: 'user',
+      sender_id: user?.id || '',
+      sender_name: user?.name || '我',
+      content: currentActive
+        ? `我们就「${seedText}」这个议题进行研讨`
+        : `我们就「${seedText}」这个议程进行研讨`,
+      created_at: new Date().toISOString(),
+    })
+    void runDiscussionRound(
+      [
+        createVirtualUserMessage(
+          doc
+            ? `请围绕"${seedText}"直接开始讨论，结合文档《${doc.title}》和评审结论给出明确判断。`
+            : `请围绕"${seedText}"直接开始讨论，像真实教研群一样先抛出一个具体判断。`
+        ),
+      ],
+      undefined,
+      topic,
+    )
+  }, [activateAgendaTopic, addMessage, agenda, doc, id, resetCurrentTopic, room?.topic, runDiscussionRound, user?.id, user?.name])
 
-    return () => window.clearTimeout(timer)
-  }, [agenda, currentTopic, discussionMode, doc, hasValidConfig, id, loading, messages, participants.length, room, runDiscussionRound])
+  const handleMarkTopicDone = useCallback(() => {
+    if (!id || !currentTopic) return
+    markTopicDone(id, currentTopic.id)
+  }, [currentTopic, id, markTopicDone])
 
   const parseTargetAgent = useCallback((text: string) => {
     const match = text.match(/^@(\S+)\s+/)
@@ -1703,14 +1704,14 @@ export default function ChatRoomPage() {
   if (!room) {
     return (
       <div className="space-y-6 animate-slide-up">
-        <Link to="/chat" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
-          <ArrowLeft className="h-4 w-4" /> 返回研讨室列表
+        <Link to={backUrl} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
+          <ArrowLeft className="h-4 w-4" /> 返回
         </Link>
         <div className="rounded-xl border border-gray-200 bg-white py-16 text-center">
           <MessageCircle className="mx-auto mb-3 h-12 w-12 text-gray-300" />
           <p className="font-medium text-gray-500">研讨室不存在</p>
-          <Link to="/chat" className="mt-4 inline-block rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 no-underline">
-            返回列表
+          <Link to={backUrl} className="mt-4 inline-block rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 no-underline">
+            返回
           </Link>
         </div>
       </div>
@@ -1720,8 +1721,8 @@ export default function ChatRoomPage() {
   return (
     <div className="flex min-h-0 flex-col animate-slide-up" style={{ height: 'calc(100vh - 112px)' }}>
       <div className="mb-4 flex shrink-0 items-center justify-between">
-        <Link to="/chat" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
-          <ArrowLeft className="h-4 w-4" /> 返回研讨室列表
+        <Link to={backUrl} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 no-underline">
+          <ArrowLeft className="h-4 w-4" /> 返回
         </Link>
         <div className="flex items-center gap-2">
           <button
@@ -1827,45 +1828,66 @@ export default function ChatRoomPage() {
       <div
         className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]"
       >
-        <aside className="hidden min-h-0 flex-col gap-3 lg:flex">
-            {agenda.length > 0 ? (
-              <div className="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm">
-                <h3 className="mb-3 text-sm font-semibold text-gray-900">讨论议程</h3>
-                <div className="space-y-2">
-                  {agenda.map((topic) => (
-                    <div
-                      key={topic.id}
-                      className={cn(
-                        'rounded-lg border px-3 py-2 text-xs leading-5 transition-colors',
-                        topic.status === 'active'
-                          ? 'border-primary-200 bg-primary-50 text-primary-700'
-                          : topic.status === 'done'
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                            : 'border-gray-200 bg-gray-50 text-gray-500'
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate">{topic.text}</span>
-                        <span className="shrink-0">
-                          {topic.status === 'active' ? '进行中' : topic.status === 'done' ? '已完成' : '待讨论'}
-                        </span>
+<aside className="hidden min-h-0 flex-col gap-3 lg:flex">
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {agenda.length > 0 ? (
+                <div className="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm">
+                  <h3 className="mb-3 text-sm font-semibold text-gray-900">研讨议程</h3>
+                  <div className="space-y-2">
+                    {agenda.map((topic) => (
+                      <div
+                        key={topic.id}
+                        onClick={() => handleTopicClick(topic)}
+                        onMouseEnter={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          setAgendaTooltipId(topic.id)
+                          setAgendaTooltipStyle({
+                            position: 'fixed',
+                            top: rect.top,
+                            left: rect.right + 8,
+                            zIndex: 9999,
+                          })
+                        }}
+                        onMouseLeave={() => setAgendaTooltipId(null)}
+                        className={cn(
+                          'cursor-pointer rounded-lg border px-3 py-2 text-xs leading-5 transition-colors hover:shadow-sm',
+                          topic.status === 'active'
+                            ? 'border-primary-200 bg-primary-50 text-primary-700'
+                            : topic.status === 'done'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                              : 'border-gray-200 bg-gray-50 text-gray-500 hover:border-primary-300 hover:bg-primary-50/50'
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate">{topic.text}</span>
+                          <span className="shrink-0">
+                            {topic.status === 'active' ? '研讨中' : topic.status === 'done' ? '已研讨' : '待研讨'}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm">
+            <div className="shrink-0 rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm">
               <h3 className="mb-3 text-sm font-semibold text-gray-900">参与者</h3>
               <div className="space-y-2">
                 {participants.map((participant) => (
-                  <div key={participant.id} className="flex items-center gap-2">
+                  <button
+                    key={participant.id}
+                    onClick={() => {
+                      setInput((prev) => `${prev}@${participant.name} `)
+                      inputRef.current?.focus()
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg border-0 bg-transparent p-1 text-left transition-colors hover:bg-gray-50 cursor-pointer"
+                  >
                     <div className="flex h-7 w-7 items-center justify-center rounded-full text-sm" style={{ backgroundColor: `${AGENT_COLORS[participant.color]}15` }}>
                       {participant.avatar || participant.name[0]}
                     </div>
                     <span className="text-sm text-gray-700">{participant.name}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -2148,6 +2170,20 @@ export default function ChatRoomPage() {
                   </div>
                 ) : null}
 
+                {currentTopic && currentTopic.status === 'active' && (
+                  <div className="mb-2 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5">
+                    <span className="text-xs text-emerald-700">
+                      当前议题：{currentTopic.text.length > 30 ? currentTopic.text.slice(0, 30) + '...' : currentTopic.text}
+                    </span>
+                    <button
+                      onClick={handleMarkTopicDone}
+                      className="rounded-md border border-emerald-300 bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-200 cursor-pointer"
+                    >
+                      通过本提议
+                    </button>
+                  </div>
+                )}
+
                 <ChatToolbar
                   onQuote={() => {
                     const lastMessage = [...messages].reverse().find((message) => message.sender_type === 'agent' && message.sender_id !== 'system')
@@ -2255,6 +2291,17 @@ export default function ChatRoomPage() {
       {showDocPicker ? (
         <DocumentPicker documents={allDocuments} onSelect={handleDocAttach} onClose={() => setShowDocPicker(false)} />
       ) : null}
+
+      {agendaTooltipId && createPortal(
+        <div
+          ref={agendaTooltipRef}
+          className="w-56 rounded-lg border border-gray-200 bg-white p-3 shadow-lg text-xs text-gray-700 leading-relaxed whitespace-normal"
+          style={agendaTooltipStyle}
+        >
+          {agenda.find((t) => t.id === agendaTooltipId)?.text}
+        </div>,
+        document.body,
+      )}
     </div>
   )
 }

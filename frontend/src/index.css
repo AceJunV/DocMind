@@ -64,6 +64,19 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes scroll-up {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+.animate-scroll-up {
+  animation: scroll-up 6s linear infinite;
+}
+
+.animate-scroll-up:hover {
+  animation-play-state: paused;
+}
+
 @keyframes slide-right {
   from { opacity: 0; transform: translateX(-100%); }
   to { opacity: 1; transform: translateX(0); }

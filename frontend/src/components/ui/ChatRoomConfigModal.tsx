@@ -10,7 +10,7 @@ import { toast } from '@/components/ui/Toast'
 import { createId } from '@/utils/id'
 import { DEFAULT_CHAT_ROOM_STRATEGY } from '@/types'
 import { useReviewBookmarkStore } from '@/stores/reviewBookmarkStore'
-import type { ChatRoom, DiscussionMode, ContextDepth, InitiativeLevel, ConflictLevel, RoomTone, FeedbackLevel, Review } from '@/types'
+import type { ChatRoom, ChatAgendaItem, DiscussionMode, ContextDepth, InitiativeLevel, ConflictLevel, RoomTone, FeedbackLevel, Review } from '@/types'
 
 const CONTEXT_DEPTH_OPTIONS: Array<{ value: ContextDepth; label: string }> = [
   { value: 'fast', label: '快速' },
@@ -159,6 +159,15 @@ export default function ChatRoomConfigModal({
           ].slice(0, 5)
         : undefined,
       bookmarkAgenda: agendaText || undefined,
+      pendingTopics: agendaText
+        ? agendaText.split('\n').filter(Boolean).map((line, index) => ({
+            id: `agenda-${createId()}`,
+            text: line.replace(/^[^\s]+\s/, '').replace(/^[^：]+：/, ''),
+            source: 'user' as const,
+            priority: 5,
+            status: 'pending' as ChatAgendaItem['status'],
+          }))
+        : undefined,
       created_at: new Date().toISOString(),
     }
     createRoom(room)
@@ -180,7 +189,8 @@ export default function ChatRoomConfigModal({
       markAsDiscussed(review.id)
     }
     onClose()
-    navigate(`/chat/${room.id}`)
+    const from = review ? `/reviews/${review.id}` : '/chat'
+    navigate(`/chat/${room.id}`, { state: { from } })
   }
 
   return (

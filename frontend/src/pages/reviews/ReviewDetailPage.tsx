@@ -152,12 +152,7 @@ export default function ReviewDetailPage() {
     if (!bookmarkList || bookmarkList.length === 0) return undefined
     const activeItems = bookmarkList.filter((b) => !b.discussed)
     if (activeItems.length === 0) return undefined
-    return BOOKMARK_CATEGORY_KEYS.map((cat) => {
-      const items = activeItems.filter((b) => b.category === cat)
-      if (items.length === 0) return ''
-      const config = BOOKMARK_CATEGORY_CONFIG[cat]
-      return `${config.icon} ${cat}：${items.map((b) => b.fullContent).join('；')}`
-    }).filter(Boolean).join('\n')
+    return activeItems.map((b) => `${BOOKMARK_CATEGORY_CONFIG[b.category].icon} ${b.category}：${b.fullContent}`).join('\n')
   }, [bookmarkList])
   const agentReviews = useMemo(() => review?.agent_reviews || [], [review?.agent_reviews])
   const completedReviews = useMemo(
