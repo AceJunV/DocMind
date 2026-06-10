@@ -192,7 +192,7 @@ function buildSearchText(agent: CapabilityAgentInput): string {
     agent.category,
     agent.name,
     agent.focusDimension,
-    agent.expertise.join(' '),
+    (Array.isArray(agent.expertise) ? agent.expertise.join(' ') : ''),
     agent.system_prompt,
   ].map(normalizeText).join(' ')
 }

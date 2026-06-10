@@ -6,10 +6,12 @@ import { AGENT_COLORS } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useReviewStore } from '@/stores/reviewStore'
 import { useAuthStore } from '@/stores/authStore'
+import { useReviewBookmarkStore } from '@/stores/reviewBookmarkStore'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import ChatRoomConfigModal from '@/components/ui/ChatRoomConfigModal'
 import { formatTimeAgo } from '@/utils/format'
+import { BOOKMARK_CATEGORY_CONFIG } from '@/types'
 import type { ChatRoom } from '@/types'
 
 export default function ChatListPage() {
@@ -22,6 +24,13 @@ export default function ChatListPage() {
   const removeRoom = useChatStore((s) => s.removeRoom)
   const allReviews = useReviewStore((s) => s.reviews)
   const review = useMemo(() => reviewId ? allReviews.find((r) => r.id === reviewId) : null, [allReviews, reviewId])
+  const bookmarkList = useReviewBookmarkStore((s) => (review?.id ? s.bookmarks[review.id] : undefined))
+  const agendaText = useMemo(() => {
+    if (!bookmarkList || bookmarkList.length === 0) return undefined
+    const activeItems = bookmarkList.filter((b) => !b.discussed)
+    if (activeItems.length === 0) return undefined
+    return activeItems.map((b) => `${BOOKMARK_CATEGORY_CONFIG[b.category].icon} ${b.category}：${b.fullContent}`).join('\n')
+  }, [bookmarkList])
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'closed'>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
@@ -272,6 +281,7 @@ export default function ChatListPage() {
           initialTopic={review ? `关于《${review.document?.title || '文档'}》的评审讨论` : ''}
           initialAgentIds={review?.agents?.map((a) => a.id) || []}
           initialDiscussionMode={review ? 'moderated' : 'free'}
+          agendaText={agendaText}
           onClose={() => setShowCreateModal(false)}
         />
       )}

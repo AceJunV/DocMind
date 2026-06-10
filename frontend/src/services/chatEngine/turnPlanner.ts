@@ -129,7 +129,23 @@ function getCapabilityProfile(
   agent: Agent,
   profiles?: Record<string, CapabilityProfile>,
 ): CapabilityProfile {
-  return profiles?.[agent.id] ?? inferCapabilityProfile(agent)
+  const cached = profiles?.[agent.id]
+  if (cached) return cached
+  try {
+    return inferCapabilityProfile(agent)
+  } catch {
+    return {
+      identityType: 'observer',
+      knowledgeLevel: 'layperson',
+      allowedPostures: ['experience_feedback', 'clarifying_question'],
+      forbiddenClaims: [],
+      preferredEvidenceStyle: 'questioning',
+      fallbackPosture: 'clarifying_question',
+      confidence: 0.35,
+      sourceSignals: ['fallback:infer_error'],
+      boundaryNotes: ['能力画像推断失败，使用默认观察者配置。'],
+    }
+  }
 }
 
 function requestedPostureForEvent(
@@ -200,7 +216,7 @@ function recentSpeakingPenalty(agentId: string, messages: ChatMessage[]): number
 function topicAffinity(agent: Agent, topic?: ChatAgendaItem | null): number {
   if (!topic) return 0
   const topicText = topic.text.toLowerCase()
-  const expertiseHit = agent.expertise.some((item) => topicText.includes(item.toLowerCase()))
+  const expertiseHit = (agent.expertise || []).some((item) => topicText.includes(item.toLowerCase()))
   const focusHit = agent.focusDimension ? topicText.includes(agent.focusDimension.toLowerCase()) : false
   const categoryHit = agent.category ? topicText.includes(agent.category.toLowerCase()) : false
   return (expertiseHit ? 30 : 0) + (focusHit ? 35 : 0) + (categoryHit ? 15 : 0)
@@ -212,7 +228,8 @@ function personalityFit(
   requestedPosture: SpeakingPosture,
   strategy: ResolvedTurnPlannerStrategy,
 ): number {
-  const { directness, strictness, empathy, humor } = agent.personality
+  const personality = agent.personality ?? { directness: 0.5, strictness: 0.5, empathy: 0.5, humor: 0.5 }
+  const { directness, strictness, empathy, humor } = personality
   let score = 0
 
   if (eventType === 'collision_detected') {

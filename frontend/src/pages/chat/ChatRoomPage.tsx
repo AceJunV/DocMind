@@ -433,7 +433,7 @@ function buildAgendaFromContext(
 function getAgentTopicFit(agent: Agent, topicText: string) {
   const text = topicText.toLowerCase()
   const focusHit = agent.focusDimension && text.includes(agent.focusDimension.toLowerCase()) ? 2.4 : 0
-  const expertiseHit = agent.expertise.reduce((score, item) => score + (text.includes(item.toLowerCase()) ? 0.9 : 0), 0)
+  const expertiseHit = (agent.expertise || []).reduce((score, item) => score + (text.includes(item.toLowerCase()) ? 0.9 : 0), 0)
   const categoryBonus = agent.category === 'student' && /学生|理解|梯度|难点|练习|听懂/.test(topicText)
     ? 1.3
     : agent.category === 'parent' && /效果|负担|作业|成长|评价/.test(topicText)

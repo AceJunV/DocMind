@@ -141,10 +141,11 @@ export default function ChatRoomConfigModal({
               tagline: tpl.tagline,
               color: tpl.color,
               system_prompt: tpl.systemPrompt || '',
-              personality: tpl.personality,
-              expertise: tpl.expertise,
-              behavior: tpl.behavior,
+              personality: tpl.personality || { directness: 0.5, strictness: 0.5, empathy: 0.5, humor: 0.5 },
+              expertise: tpl.expertise || [],
+              behavior: tpl.behavior || { style: '' },
               category: tpl.category,
+              focusDimension: tpl.focusDimension,
             } as const
           }
         }
@@ -156,6 +157,12 @@ export default function ChatRoomConfigModal({
               avatar: agent.avatar,
               tagline: agent.tagline,
               color: agent.color,
+              expertise: agent.expertise || [],
+              system_prompt: agent.system_prompt || '',
+              category: agent.category,
+              focusDimension: agent.focusDimension,
+              personality: agent.personality || { directness: 0.5, strictness: 0.5, empathy: 0.5, humor: 0.5 },
+              behavior: agent.behavior || { style: '' },
             }
           : null
       })
