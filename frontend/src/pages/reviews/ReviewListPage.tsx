@@ -4,7 +4,7 @@ import { ArrowRight, ClipboardCheck, Clock3, FileText, Sparkles, Upload } from '
 import { cn } from '@/lib/utils'
 import { AGENT_COLORS } from '@/stores/agentStore'
 import { useReviewStore } from '@/stores/reviewStore'
-import { formatTimeAgo } from '@/utils/format'
+import { formatTimeAgo, formatDateTime } from '@/utils/format'
 import { DocumentUploadModal } from '@/components/DocumentUploadModal'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -172,8 +172,11 @@ export default function ReviewListPage() {
                             <Badge variant={review.status === 'completed' ? 'success' : 'warning'}>
                               {review.status === 'completed' ? '已完成' : '进行中'}
                             </Badge>
-                            <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                            <span className="inline-flex items-center gap-1 text-xs text-gray-600">
                               <Clock3 className="h-3.5 w-3.5" />
+                              {formatDateTime(review.created_at)}
+                            </span>
+                            <span className="text-xs text-gray-400">
                               {formatTimeAgo(review.created_at)}
                             </span>
                           </div>

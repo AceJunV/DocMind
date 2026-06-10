@@ -29,7 +29,7 @@ import { toast } from '@/components/ui/Toast'
 
 const FLOW_STEPS = [
   { icon: Upload, label: '上传教案', description: '上传 PDF、DOC、DOCX、Markdown 或 TXT 格式的教研案文档' },
-  { icon: Bot, label: '准备评审', description: '选择评审角色，配置不同视角的专业评委' },
+  { icon: Bot, label: '选择评委', description: '挑选不同视角的评委，为评审配置专业角色' },
   { icon: ClipboardCheck, label: '发起评审', description: '多角色并行分析，生成共识、争议点与改进建议' },
   { icon: MessageCircle, label: '进入研讨', description: '围绕评审结论继续讨论，角色主动推进重点问题' },
 ]
@@ -201,10 +201,10 @@ export default function DashboardPage() {
           <div className="space-y-3">
             <div>
               <h1 className="max-w-4xl text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-                {user?.name || '体验用户'}，今天先处理最有价值的教学问题。
+                你好，欢迎使用教研案 DocMind。
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-gray-600 sm:text-[15px]">
-                先上传教研案，再让不同角色从目标、难点、课堂节奏和学生理解这些角度给出更深的判断。完成评审后，可直接进入研讨室继续推进争议点。
+                让不同角色从目标，难点，课堂节奏和学生理解等角度给出深度的判断，同时在研讨室推进争议点落地。
               </p>
             </div>
 

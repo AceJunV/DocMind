@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useCallback } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import {
   ArrowLeft,
   Check,
   ClipboardCheck,
-  Copy,
+  
   Download,
   FileText,
   Lightbulb,
@@ -20,6 +20,7 @@ import ChatRoomConfigModal from '@/components/ui/ChatRoomConfigModal'
 import BookmarkableParagraph from '@/components/ui/BookmarkableParagraph'
 import FloatingBookmarkPanel from '@/components/ui/FloatingBookmarkPanel'
 import { useReviewBookmarkStore } from '@/stores/reviewBookmarkStore'
+import { toPng } from 'html-to-image'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/Toast'
 import { RadarChart } from '@/components/ui/RadarChart'
@@ -448,139 +449,50 @@ export default function ReviewDetailPage() {
     toast('success', '教研评审报告已下载')
   }
 
-  const handleExportImage = () => {
-    const canvas = document.createElement('canvas')
-    const width = 1400
-    const height = 1800
-    const padding = 72
-    canvas.width = width
-    canvas.height = height
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+  const handleExportImage = useCallback(async () => {
+    const el = reportTopRef.current
+    if (!el) return
 
-    ctx.fillStyle = '#f8fafc'
-    ctx.fillRect(0, 0, width, height)
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(36, 36, width - 72, height - 72)
-    ctx.strokeStyle = '#e5e7eb'
-    ctx.strokeRect(36, 36, width - 72, height - 72)
-
-    const wrapText = (text: string, x: number, y: number, maxWidth: number, lineHeight: number) => {
-      const chars = text.split('')
-      let line = ''
-      let nextY = y
-      chars.forEach((char) => {
-        const testLine = line + char
-        if (ctx.measureText(testLine).width > maxWidth && line) {
-          ctx.fillText(line, x, nextY)
-          line = char
-          nextY += lineHeight
-        } else {
-          line = testLine
+    // Temporarily hide interactive elements for clean screenshot
+    const toHide = el.querySelectorAll<HTMLElement>('a, button, .fixed')
+    const hidden: HTMLElement[] = []
+    toHide.forEach((item) => {
+      if (item.tagName === 'A' || item.tagName === 'BUTTON') {
+        if (item.closest('.dm-hero-card') && item.tagName !== 'H1' && item.tagName !== 'SPAN' && item.tagName !== 'P') {
+          hidden.push(item)
+          item.style.visibility = 'hidden'
         }
-      })
-      if (line) {
-        ctx.fillText(line, x, nextY)
-        nextY += lineHeight
+      } else if (item.classList.contains('fixed')) {
+        hidden.push(item)
+        item.style.visibility = 'hidden'
       }
-      return nextY
-    }
-
-    let y = padding
-    ctx.fillStyle = '#111827'
-    ctx.font = 'bold 38px sans-serif'
-    y = wrapText(`《${docTitle}》教研评审报告`, padding, y, width - padding * 2, 48)
-    ctx.font = '18px sans-serif'
-    ctx.fillStyle = '#4b5563'
-    y = wrapText(`综合评分：${review.overall_score?.toFixed(1) || '-'}    成功角色：${completedReviews.length}    生成失败：${failedReviews.length}`, padding, y + 8, width - padding * 2, 30)
-
-    if (summary?.overview) {
-      ctx.fillStyle = '#111827'
-      ctx.font = 'bold 24px sans-serif'
-      ctx.fillText('总体诊断', padding, y + 32)
-      ctx.font = '18px sans-serif'
-      ctx.fillStyle = '#374151'
-      y = wrapText(summary.overview, padding, y + 64, width - padding * 2, 30)
-    }
-
-    const radarCenterX = padding + 220
-    const radarCenterY = y + 190
-    const radius = 130
-    if (avgDimScores.length > 0) {
-      ctx.strokeStyle = '#d1d5db'
-      ctx.fillStyle = '#4b5563'
-      ctx.font = '15px sans-serif'
-      avgDimScores.forEach((item, index) => {
-        const angle = (Math.PI * 2 * index) / avgDimScores.length - Math.PI / 2
-        const x = radarCenterX + Math.cos(angle) * radius
-        const pointY = radarCenterY + Math.sin(angle) * radius
-        ctx.beginPath()
-        ctx.moveTo(radarCenterX, radarCenterY)
-        ctx.lineTo(x, pointY)
-        ctx.stroke()
-        ctx.fillText(item.name, x - 24, pointY + (pointY > radarCenterY ? 24 : -12))
-      })
-      ctx.beginPath()
-      avgDimScores.forEach((item, index) => {
-        const angle = (Math.PI * 2 * index) / avgDimScores.length - Math.PI / 2
-        const scoreRadius = radius * (item.avg / 5)
-        const x = radarCenterX + Math.cos(angle) * scoreRadius
-        const pointY = radarCenterY + Math.sin(angle) * scoreRadius
-        if (index === 0) ctx.moveTo(x, pointY)
-        else ctx.lineTo(x, pointY)
-      })
-      ctx.closePath()
-      ctx.fillStyle = 'rgba(99, 102, 241, 0.24)'
-      ctx.fill()
-      ctx.strokeStyle = '#6366f1'
-      ctx.stroke()
-
-      ctx.fillStyle = '#111827'
-      ctx.font = 'bold 24px sans-serif'
-      ctx.fillText(`${dimensionLabel}雷达图`, padding, y + 24)
-      ctx.font = '18px sans-serif'
-      ctx.fillStyle = '#374151'
-      avgDimScores.forEach((item, index) => {
-        ctx.fillText(`${item.name}：${item.avg.toFixed(1)}/5`, padding + 520, y + 80 + index * 30)
-      })
-      y += 360
-    }
-
-    ctx.fillStyle = '#111827'
-    ctx.font = 'bold 24px sans-serif'
-    ctx.fillText('核心问题', padding, y)
-    ctx.font = '18px sans-serif'
-    ctx.fillStyle = '#374151'
-    y += 34
-    ;(painPoints.length ? painPoints.slice(0, 3) : ['暂无明确痛点汇总']).forEach((item, index) => {
-      y = wrapText(`${index + 1}. ${item}`, padding, y, width - padding * 2, 30)
     })
 
-    ctx.fillStyle = '#111827'
-    ctx.font = 'bold 24px sans-serif'
-    ctx.fillText('优先建议', padding, y + 28)
-    ctx.font = '18px sans-serif'
-    ctx.fillStyle = '#374151'
-    y += 64
-    prioritySuggestions.slice(0, 5).forEach((suggestion, index) => {
-      y = wrapText(`${index + 1}. ${suggestion.title || '建议'}：${suggestion.content}`, padding, y, width - padding * 2, 30)
-    })
-
-    const link = document.createElement('a')
-    link.download = `教研评审报告_${docTitle}.png`
-    link.href = canvas.toDataURL('image/png')
-    link.click()
-    toast('success', '教研评审报告图片已下载')
-  }
-
-  const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(buildReportMarkdown())
-      toast('success', '评审报告已复制到剪贴板')
-    } catch {
-      toast('error', '复制失败，请手动复制')
+      const dataUrl = await toPng(el, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: '#f8fafc',
+        skipFonts: true,
+      })
+      const res = await fetch(dataUrl)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.download = `教研评审报告_${docTitle}.png`
+      link.href = url
+      link.click()
+      URL.revokeObjectURL(url)
+      toast('success', '教研评审报告图片已下载')
+    } catch (err) {
+      console.error('Export image failed:', err)
+      toast('error', '导出图片失败，请重试')
+    } finally {
+      hidden.forEach((btn) => {
+        btn.style.visibility = ''
+      })
     }
-  }
+  }, [docTitle])
 
   const handleCreateChat = () => {
     setShowCreateModal(true)
@@ -742,10 +654,7 @@ export default function ReviewDetailPage() {
               <h1 className="mt-3 max-w-4xl text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
                 《{docTitle}》教研评审报告
               </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-gray-600">
-                这不是一堆零散意见，而是从多角色分析中压缩出的结果阅读态。先看总体诊断和关键痛点，再往下读建议、共识、争议和分角色细评。
-              </p>
-            </div>
+              </div>
 
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" onClick={handleExport}>
@@ -756,10 +665,7 @@ export default function ReviewDetailPage() {
                 <Download className="h-4 w-4" />
                 导出图片
               </Button>
-              <Button variant="secondary" onClick={handleCopy}>
-                <Copy className="h-4 w-4" />
-                复制
-              </Button>
+              
               <Link to={`/documents/${review.document_id}?from=review&reviewId=${review.id}`} className="no-underline">
                 <Button variant="secondary">
                   <FileText className="h-4 w-4" />
