@@ -11,7 +11,7 @@ export interface Document {
   owner_id: string
   title: string
   file_name: string
-  file_type: 'pdf' | 'doc' | 'docx' | 'md' | 'txt'
+  file_type: 'pdf' | 'doc' | 'docx' | 'wps' | 'md' | 'txt'
   file_size: number
   raw_content?: string
   structured_content?: Record<string, unknown>
@@ -295,6 +295,7 @@ export interface ChatMessageAttachment {
 export interface ChatMessage {
   id: string
   room_id: string
+  topicId?: string
   sender_type: 'user' | 'agent'
   sender_id: string
   sender_name: string

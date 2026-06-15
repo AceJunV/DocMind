@@ -27,6 +27,7 @@ const FILE_ICONS: Record<string, typeof FileText> = {
   pdf: FileText,
   doc: File,
   docx: File,
+  wps: File,
   md: FileCode,
   txt: File,
 }
@@ -35,6 +36,7 @@ const FILE_COLORS: Record<string, string> = {
   pdf: 'bg-red-50 text-red-500',
   doc: 'bg-blue-50 text-blue-500',
   docx: 'bg-blue-50 text-blue-500',
+  wps: 'bg-orange-50 text-orange-500',
   md: 'bg-slate-100 text-slate-600',
   txt: 'bg-gray-100 text-gray-500',
 }

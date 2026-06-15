@@ -456,6 +456,33 @@ async function parseDoc(file: File): Promise<ParseResult> {
   }
 }
 
+async function parseWps(file: File): Promise<ParseResult> {
+  const arrayBuffer = await file.arrayBuffer()
+  const bytes = new Uint8Array(arrayBuffer)
+  let text: string
+
+  if (isDocxLike(bytes)) {
+    return parseDocx(file)
+  }
+
+  if (isOleDoc(bytes)) {
+    text = extractBinaryDocText(arrayBuffer)
+  } else {
+    text = parseDocText(readTextBuffer(arrayBuffer))
+  }
+
+  assertReadableText(text, 'WPS')
+  const sections = splitPlainTextSections(text)
+  const teaching_plan = extractTeachingPlanFields(text)
+
+  return {
+    raw_content: text,
+    structured_content: { sections },
+    word_count: countWords(text),
+    teaching_plan,
+  }
+}
+
 export async function parseDocument(file: File): Promise<ParseResult> {
   const ext = file.name.split('.').pop()?.toLowerCase()
   switch (ext) {
@@ -467,6 +494,8 @@ export async function parseDocument(file: File): Promise<ParseResult> {
       return parsePdf(file)
     case 'doc':
       return parseDoc(file)
+    case 'wps':
+      return parseWps(file)
     case 'docx':
       return parseDocx(file)
     default:
@@ -490,5 +519,5 @@ export function createDocumentFromFile(file: File, ownerId: string): Document {
   }
 }
 
-export const SUPPORTED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.md', '.txt']
+export const SUPPORTED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.wps', '.md', '.txt']
 export const MAX_FILE_SIZE = 20 * 1024 * 1024

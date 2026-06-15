@@ -4,11 +4,12 @@ import type { DiscussionSummary } from '@/types'
 interface Props {
   summary: DiscussionSummary | null
   loading: boolean
+  error?: string | null
   onGenerate: () => void
   onClose: () => void
 }
 
-export function DiscussionSummaryCard({ summary, loading, onGenerate, onClose }: Props) {
+export function DiscussionSummaryCard({ summary, loading, error, onGenerate, onClose }: Props) {
   return (
     <div className="absolute inset-0 z-30 bg-white dark:bg-gray-800 flex flex-col rounded-xl">
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-4 py-3">
@@ -25,6 +26,16 @@ export function DiscussionSummaryCard({ summary, loading, onGenerate, onClose }:
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <Loader2 className="h-6 w-6 text-primary-500 animate-spin" />
             <p className="text-sm text-gray-500">正在生成讨论总结...</p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <p className="text-sm text-red-500 text-center">{error}</p>
+            <button
+              onClick={onGenerate}
+              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 cursor-pointer border-0 transition-colors"
+            >
+              重新生成
+            </button>
           </div>
         ) : summary ? (
           <div className="space-y-4">

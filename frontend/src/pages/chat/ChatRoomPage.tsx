@@ -28,7 +28,7 @@ import { BookmarkPanel } from '@/components/chat/BookmarkPanel'
 import { exportBookmarksAsMarkdown } from '@/components/chat/bookmarkExport'
 import { DiscussionSummaryCard } from '@/components/chat/DiscussionSummaryCard'
 import { cn } from '@/lib/utils'
-import { AGENT_COLORS, useAgentStore } from '@/stores/agentStore'
+import { AGENT_COLORS, useAgentStore, buildSystemPrompt } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useDocumentStore } from '@/stores/documentStore'
 import { useReviewStore } from '@/stores/reviewStore'
@@ -39,7 +39,6 @@ import {
   buildAgentMemoryMap,
   buildCapabilityInstruction,
   buildFeedbackDisplay,
-  buildDiscussionArtifact,
   buildRepetitionRecoveryInstruction,
   buildTurnMessageMetadata,
   createIdentitySafeFallbackReply,
@@ -90,6 +89,7 @@ type DiscussionTurn = {
   intent: DiscussionTurnIntent
   targetAgent?: Agent
   focus: string
+  isUserDirected?: boolean
   event?: RoutedChatEvent
   speakingPosture?: SpeakingPosture
   capabilityProfile?: CapabilityProfile
@@ -160,6 +160,7 @@ function buildChatSystemPrompt(
   mode: DiscussionMode,
   strategy: ChatRoomStrategy | undefined,
   capabilityInstruction: string,
+  userName?: string,
 ) {
   const teammates = otherAgents.length > 0
     ? `\n群里还有：${otherAgents.map((item) => `${item.name}（${item.tagline}）`).join('、')}。你可以直接回应他们的观点或点名互动。`
@@ -195,9 +196,13 @@ function buildChatSystemPrompt(
     ? `\n身份与能力边界：\n${capabilityInstruction}`
     : ''
 
+  const mentionGuide = userName
+    ? `\n当直接回应用户 ${userName} 时，请在开头使用 @${userName}。`
+    : ''
+
   return `${agent.system_prompt}
 你必须使用简体中文回复。
-${teammates}
+${teammates}${mentionGuide}
 ${modeGuide}
 ${toneGuide}
 ${citationGuide}
@@ -548,7 +553,7 @@ function buildDiscussionTurns(
   const topicText = buildRoundFocus(recentMessages, topic, mode)
 
   if (targetAgent) {
-    return [{ agent: targetAgent, intent: userIntent || 'open', focus: topicText }] satisfies DiscussionTurn[]
+    return [{ agent: targetAgent, intent: userIntent || 'open', focus: topicText, isUserDirected: true }] satisfies DiscussionTurn[]
   }
 
   if (mode === 'free' && isRealUserMessage(latestUserMessage)) {
@@ -688,8 +693,12 @@ function mapPlannedIntent(intent: TurnIntent, translated: boolean): DiscussionTu
   }
 }
 
-function buildTurnInstruction(turn: DiscussionTurn, index: number, mode: DiscussionMode) {
-  const target = turn.targetAgent ? `请直接回应 ${turn.targetAgent.name} 刚才的观点。` : ''
+function buildTurnInstruction(turn: DiscussionTurn, index: number, mode: DiscussionMode, userName?: string) {
+  const target = turn.targetAgent
+    ? `请直接回应 ${turn.targetAgent.name} 刚才的观点。`
+    : turn.isUserDirected && userName
+      ? `请直接回应用户 ${userName} 刚才的提问。`
+      : ''
   const sharedRules = [
     `本轮你的任务：${getIntentLabel(turn.intent)}。`,
     `讨论焦点：“${turn.focus.slice(0, 80)}”。`,
@@ -782,6 +791,8 @@ export default function ChatRoomPage() {
   const summaries = useChatStore((state) => state.summaries).filter((item) => item.roomId === id)
   const addSummary = useChatStore((state) => state.addSummary)
   const allAgents = useAgentStore((state) => state.agents)
+  const templates = useAgentStore((state) => state.templates)
+  const templateVisibility = useAgentStore((state) => state.templateVisibility)
   const allDocuments = useDocumentStore((state) => state.documents)
   const review = useReviewStore((state) => state.reviews.find((item) => item.id === room?.review_id))
   const config = useSettingsStore((state) => state.currentConfig)
@@ -808,6 +819,7 @@ export default function ChatRoomPage() {
   const agendaTooltipRef = useRef<HTMLDivElement>(null)
   const [showSummary, setShowSummary] = useState(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -847,13 +859,19 @@ export default function ChatRoomPage() {
     [validFilteredAgentId, participants]
   )
   const visibleMessages = useMemo(() => {
-    if (!validFilteredAgentId) return messages
-    return messages.filter((message) => (
-      message.sender_type !== 'agent' ||
-      !message.sender_color ||
-      message.sender_id === validFilteredAgentId
-    ))
-  }, [messages, validFilteredAgentId])
+    let filtered = messages
+    if (validFilteredAgentId) {
+      filtered = filtered.filter((message) => (
+        message.sender_type !== 'agent' ||
+        !message.sender_color ||
+        message.sender_id === validFilteredAgentId
+      ))
+    }
+    if (currentTopic) {
+      filtered = filtered.filter((message) => message.topicId === currentTopic.id)
+    }
+    return filtered
+  }, [currentTopic, messages, validFilteredAgentId])
   const reviewSuggestions = useMemo(() => {
     const collected = [
       ...(review?.summary?.top_suggestions || []),
@@ -894,7 +912,7 @@ export default function ChatRoomPage() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages, scrollToBottom])
+  }, [currentTopic, messages, scrollToBottom])
 
   useEffect(() => {
     return () => {
@@ -937,7 +955,7 @@ export default function ChatRoomPage() {
       const capabilityInstruction = roomStrategy?.identityBoundary === 'off'
         ? ''
         : buildCapabilityInstruction(profile)
-      const systemPrompt = buildChatSystemPrompt(agent, contextPrompt, otherAgents, discussionMode, roomStrategy, capabilityInstruction)
+      const systemPrompt = buildChatSystemPrompt(agent, contextPrompt, otherAgents, discussionMode, roomStrategy, capabilityInstruction, user?.name)
       const historyMessages = buildRecentContextMessages(recentMessages, documentMap)
       const finalMessages = extraInstruction
         ? [...historyMessages, { role: 'user' as const, content: extraInstruction }]
@@ -1033,6 +1051,7 @@ export default function ChatRoomPage() {
       agent: Agent,
       content: string,
       metadata?: Pick<ChatMessage, 'intent' | 'respondingTo' | 'contextSource' | 'evidenceLevel' | 'citations'>,
+      topicIdOverride?: string,
     ) => {
       if (!id) return
 
@@ -1043,6 +1062,7 @@ export default function ChatRoomPage() {
         sender_id: agent.id,
         sender_name: agent.name,
         sender_color: agent.color,
+        topicId: topicIdOverride ?? currentTopic?.id,
         content,
         ...metadata,
         created_at: new Date().toISOString(),
@@ -1052,7 +1072,7 @@ export default function ChatRoomPage() {
         toast('info', `${agent.name} 提到了你`)
       }
     },
-    [addMessage, id, user]
+    [addMessage, currentTopic, id, user]
   )
 
   const runDiscussionRound = useCallback(async (recentMessages: ChatMessage[], targetAgent?: Agent, topic?: ChatAgendaItem | null) => {
@@ -1076,7 +1096,7 @@ export default function ChatRoomPage() {
         if (abortRef.current?.signal.aborted) break
 
         const instructionParts = [
-          buildTurnInstruction(turn, index, discussionMode),
+          buildTurnInstruction(turn, index, discussionMode, user?.name),
           getEventInstruction(agent, conversation),
         ].filter(Boolean)
 
@@ -1185,7 +1205,7 @@ export default function ChatRoomPage() {
           continue
         }
 
-        addAgentMsg(agent, replyResult.text, messageMetadata)
+        addAgentMsg(agent, replyResult.text, messageMetadata, topic?.id)
         responsesAdded += 1
         recordStrategyLog({
           agentId: agent.id,
@@ -1245,7 +1265,7 @@ export default function ChatRoomPage() {
         })
         if (!fallbackRepetition.shouldSpeak) return
 
-        addAgentMsg(fallbackAgent, fallbackReply.text, fallbackMetadata)
+        addAgentMsg(fallbackAgent, fallbackReply.text, fallbackMetadata, topic?.id)
         recordStrategyLog({
           agentId: fallbackAgent.id,
           selectedAgentName: fallbackAgent.name,
@@ -1285,6 +1305,7 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
         sender_type: 'user',
         sender_id: user?.id || '',
         sender_name: user?.name || '我',
+        topicId: topic.id,
         content: `「${currentActive.text}」议题我们先放一放，我们先研讨「${topic.text}」议题。`,
         created_at: new Date().toISOString(),
       })
@@ -1292,17 +1313,18 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
 
     activateAgendaTopic(id, topic.id)
     const seedText = topic.text || room?.topic || '自由讨论'
-    addMessage(id, {
-      id: createId(),
-      room_id: id,
-      sender_type: 'user',
-      sender_id: user?.id || '',
-      sender_name: user?.name || '我',
-      content: currentActive
-        ? `我们就「${seedText}」这个议题进行研讨`
-        : `我们就「${seedText}」这个议程进行研讨`,
-      created_at: new Date().toISOString(),
-    })
+    if (!currentActive) {
+      addMessage(id, {
+        id: createId(),
+        room_id: id,
+        sender_type: 'user',
+        sender_id: user?.id || '',
+        sender_name: user?.name || '我',
+        topicId: topic.id,
+        content: `我们就「${seedText}」这个议程进行研讨`,
+        created_at: new Date().toISOString(),
+      })
+    }
     void runDiscussionRound(
       [
         createVirtualUserMessage(
@@ -1322,13 +1344,13 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
   }, [currentTopic, id, markTopicDone])
 
   const parseTargetAgent = useCallback((text: string) => {
-    const match = text.match(/^@(\S+)\s+/)
+    const match = text.match(/@(\S+)\s+/)
     if (!match) {
       return { targetAgent: undefined, cleanText: text }
     }
 
     const targetAgent = participants.find((item) => item.name === match[1])
-    return { targetAgent, cleanText: text.slice(match[0].length) }
+    return { targetAgent, cleanText: text.replace(match[0], '').trim() }
   }, [participants])
 
   const handleReaction = useCallback(
@@ -1355,7 +1377,11 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
 
     updateDiscussionState(id, 'summarizing')
     setSummaryLoading(true)
-    const agentMessages = messages.filter((message) => message.sender_type === 'agent' && message.sender_id !== 'system')
+    setSummaryError(null)
+    const topicMessages = currentTopic
+      ? messages.filter((m) => m.topicId === currentTopic.id)
+      : messages
+    const agentMessages = topicMessages.filter((message) => message.sender_type === 'agent' && message.sender_id !== 'system')
     const digest = agentMessages.slice(-20).map((message) => `[${message.sender_name}]: ${message.content}`).join('\n')
 
     try {
@@ -1393,34 +1419,17 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
           generatedAt: new Date().toISOString(),
         })
       } else {
-        const artifact = buildDiscussionArtifact(messages)
-        addSummary({
-          id: createId(),
-          roomId: id,
-          keyPoints: artifact.consensus,
-          agreements: artifact.adoptedIdeas,
-          disagreements: artifact.disagreements,
-          actionItems: artifact.actionItems,
-          generatedAt: artifact.generatedAt,
-        })
+        setSummaryError('AI 返回格式异常，请点击重新生成')
+        return
       }
     } catch {
-      const artifact = buildDiscussionArtifact(messages)
-      addSummary({
-        id: createId(),
-        roomId: id,
-        keyPoints: artifact.consensus,
-        agreements: artifact.adoptedIdeas,
-        disagreements: artifact.disagreements,
-        actionItems: artifact.actionItems,
-        generatedAt: artifact.generatedAt,
-      })
-      toast('info', '已用本地讨论纪要兜底')
+      setSummaryError('网络异常或 AI 服务错误，请点击重新生成')
+      return
     }
 
     setSummaryLoading(false)
     updateDiscussionState(id, room?.status === 'closed' ? 'closed' : 'idle')
-  }, [addSummary, hasValidConfig, id, messages, room?.status, updateDiscussionState])
+  }, [addSummary, currentTopic, hasValidConfig, id, messages, room?.status, updateDiscussionState])
 
   const handleControlAction = async (actionId: ChatControlActionId) => {
     if (!id || !hasValidConfig) {
@@ -1493,9 +1502,8 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
   }, [])
 
   const handleFollowUp = useCallback((message: ChatMessage) => {
-    const quotedContent = message.content.replace(/\s+/g, ' ').trim().slice(0, 120)
     setReplyTo(message)
-    setInput(`@${message.sender_name} 针对${message.sender_name}的观点：“${quotedContent}”\n\n我想追问：`)
+    setInput(`@${message.sender_name} `)
     inputRef.current?.focus()
   }, [])
 
@@ -1556,6 +1564,7 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
     const rawText = input.trim()
     const normalizedText = rawText || '我附上了一份文档，请先阅读并结合内容继续讨论。'
     const { targetAgent, cleanText } = parseTargetAgent(normalizedText)
+    const effectiveTarget = targetAgent || (replyTo?.sender_type === 'agent' ? participants.find((p) => p.id === replyTo.sender_id) : undefined)
     const promptText = targetAgent ? cleanText : normalizedText
     const pendingDocument = pendingAttachment ? documentMap.get(pendingAttachment.documentId) : undefined
     const enrichedPrompt = pendingDocument
@@ -1572,8 +1581,9 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
       sender_type: 'user',
       sender_id: user?.id || '',
       sender_name: user?.name || '我',
+      topicId: currentTopic?.id,
       content: normalizedText,
-      target_agent_id: targetAgent?.id,
+      target_agent_id: effectiveTarget?.id,
       reply_to: replyTo?.id,
       replyToMessage: replyTo ? { senderName: replyTo.sender_name, content: replyTo.content } : undefined,
       attachment: pendingAttachment || undefined,
@@ -1604,8 +1614,11 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
     const controller = new AbortController()
     abortRef.current = controller
 
+    const topicMessages = currentTopic
+      ? messages.filter((m) => !m.topicId || m.topicId === currentTopic.id)
+      : messages
     const recentConversation: ChatMessage[] = [
-      ...messages.slice(-MAX_RECENT_MESSAGES + 1),
+      ...topicMessages.slice(-MAX_RECENT_MESSAGES + 1),
       {
         ...userMessage,
         content: enrichedPrompt,
@@ -1613,7 +1626,7 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
     ]
 
     try {
-      await runDiscussionRound(recentConversation, targetAgent, currentTopic)
+      await runDiscussionRound(recentConversation, effectiveTarget, currentTopic)
       updateMessageStatus(id, messageId, 'delivered')
     } catch {
       updateMessageStatus(id, messageId, 'failed')
@@ -1698,7 +1711,42 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
     [addAgentMsg, addMessage, addParticipant, doc, getAgentReply, getEventInstruction, hasValidConfig, id, messages, recordStrategyLog, room?.topic, roomStrategy]
   )
 
-  const availableToInvite = allAgents.filter((agent) => !participants.some((item) => item.id === agent.id))
+  const availableToInvite = (() => {
+    const candidates = new Map<string, Agent>()
+    if (review?.agents) {
+      for (const agent of review.agents) {
+        if (!candidates.has(agent.id)) candidates.set(agent.id, agent)
+      }
+    }
+    for (const agent of allAgents) {
+      if (agent.visibleInReview !== false && !candidates.has(agent.id)) {
+        candidates.set(agent.id, agent)
+      }
+    }
+    for (const tpl of templates) {
+      const id = `tpl-${tpl.id}`
+      if (templateVisibility[tpl.id] !== false && !candidates.has(id)) {
+        candidates.set(id, {
+          id,
+          name: tpl.name,
+          avatar: tpl.avatar,
+          tagline: tpl.tagline,
+          color: tpl.color,
+          system_prompt: buildSystemPrompt(tpl),
+          personality: tpl.personality,
+          expertise: tpl.expertise,
+          behavior: tpl.behavior,
+          category: tpl.category,
+          owner_id: '',
+          source: 'template',
+          is_public: false,
+          usage_count: 0,
+          created_at: new Date().toISOString(),
+        } as Agent)
+      }
+    }
+    return [...candidates.values()]
+  })().filter((agent) => !participants.some((item) => item.id === agent.id))
   const hasDocumentPanel = true
 
   if (!room) {
@@ -1739,12 +1787,6 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
           >
             <BookmarkIcon className="h-3.5 w-3.5" />
             {bookmarks.length > 0 ? <span className="text-[10px] text-primary-600">{bookmarks.length}</span> : null}
-          </button>
-          <button
-            onClick={() => setShowInvite(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 cursor-pointer"
-          >
-            <UserPlus className="h-3.5 w-3.5" /> 邀请角色
           </button>
           {room.status === 'active' ? (
             <button
@@ -1872,8 +1914,16 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
             </div>
 
             <div className="shrink-0 rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm">
-              <h3 className="mb-3 text-sm font-semibold text-gray-900">参与者</h3>
-              <div className="space-y-2">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-900">参与者</h3>
+                <button
+                  onClick={() => setShowInvite(true)}
+                  className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 cursor-pointer"
+                >
+                  <UserPlus className="h-3 w-3" /> 邀请
+                </button>
+              </div>
+              <div className="max-h-[260px] space-y-2 overflow-y-auto">
                 {participants.map((participant) => (
                   <button
                     key={participant.id}
@@ -1972,7 +2022,7 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
               const replyQuote = message.replyToMessage ? (
                 <div className="mb-1.5 rounded-md border-l-2 border-gray-300 bg-gray-100 px-3 py-1.5 text-xs dark:border-gray-500 dark:bg-gray-700/50">
                   <span className="font-medium text-gray-600 dark:text-gray-300">{message.replyToMessage.senderName}</span>
-                  <p className="mt-0.5 truncate text-gray-500 dark:text-gray-400">{message.replyToMessage.content.slice(0, 80)}</p>
+                  <p className="mt-0.5 truncate text-gray-500 dark:text-gray-400">{message.replyToMessage.content.replace(/@\S+/g, '').replace(/\s+/g, ' ').trim().slice(0, 80)}</p>
                 </div>
               ) : null
 
@@ -2028,7 +2078,8 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
 
               return (
                 <div key={message.id} data-msg-id={message.id} className="group flex justify-start transition-all">
-                  <div className="max-w-[78%]">
+                  <div className="flex items-start gap-1.5">
+                    <div className="max-w-[78%] min-w-0">
                     <div className="mb-1 flex items-center gap-1.5">
                       <div className="flex h-6 w-6 items-center justify-center rounded-full text-xs" style={{ backgroundColor: `${AGENT_COLORS[message.sender_color]}15` }}>
                         {participants.find((participant) => participant.id === message.sender_id)?.avatar || message.sender_name[0]}
@@ -2039,14 +2090,6 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
                       <span className="ml-1 text-xs text-gray-400">
                         {new Date(message.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                       </span>
-                      <button
-                        onClick={() => handleFollowUp(message)}
-                        className="ml-1 border-0 bg-transparent p-0 text-gray-400 opacity-0 transition-opacity hover:text-primary-500 group-hover:opacity-100 cursor-pointer"
-                        title={`追问 ${message.sender_name}`}
-                        aria-label={`追问 ${message.sender_name}`}
-                      >
-                        <Reply className="h-3.5 w-3.5" />
-                      </button>
                     </div>
 
                     {metadataBadges.length > 0 ? (
@@ -2077,7 +2120,16 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
 
                     <EmojiReactionBar reactions={message.reactions} onReact={(emoji) => handleReaction(message.id, emoji)} />
                   </div>
+                  <button
+                    onClick={() => handleFollowUp(message)}
+                    className="mt-7 shrink-0 rounded-md bg-primary-500 px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity hover:bg-primary-600 group-hover:opacity-100 cursor-pointer"
+                    title={`追问 ${message.sender_name}`}
+                    aria-label={`追问 ${message.sender_name}`}
+                  >
+                    追问
+                  </button>
                 </div>
+              </div>
               )
             })}
 
@@ -2152,7 +2204,7 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
                     <Reply className="h-3.5 w-3.5 shrink-0 text-primary-500" />
                     <div className="min-w-0 flex-1">
                       <span className="text-xs font-medium text-primary-600 dark:text-primary-400">{replyTo.sender_name}</span>
-                      <p className="truncate text-xs text-gray-500">{replyTo.content.slice(0, 60)}</p>
+                      <p className="truncate text-xs text-gray-500">{replyTo.content.replace(/@\S+/g, '').replace(/\s+/g, ' ').trim().slice(0, 60)}</p>
                     </div>
                     <button onClick={() => setReplyTo(null)} className="border-0 bg-transparent p-0 text-gray-400 hover:text-gray-600 cursor-pointer">
                       <X className="h-3.5 w-3.5" />
@@ -2281,8 +2333,9 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
             <DiscussionSummaryCard
               summary={summaries[summaries.length - 1] || null}
               loading={summaryLoading}
+              error={summaryError}
               onGenerate={handleGenerateSummary}
-              onClose={() => setShowSummary(false)}
+              onClose={() => { setShowSummary(false); setSummaryError(null) }}
             />
           ) : null}
         </main>

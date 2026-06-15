@@ -28,7 +28,7 @@ import { parseDocument, createDocumentFromFile, SUPPORTED_EXTENSIONS, MAX_FILE_S
 import { toast } from '@/components/ui/Toast'
 
 const FLOW_STEPS = [
-  { icon: Upload, label: '上传教案', description: '上传 PDF、DOC、DOCX、Markdown 或 TXT 格式的教研案文档' },
+  { icon: Upload, label: '上传教案', description: '上传 PDF、DOC、DOCX、WPS、Markdown 或 TXT 格式的教研案文档' },
   { icon: Bot, label: '选择评委', description: '挑选不同视角的评委，为评审配置专业角色' },
   { icon: ClipboardCheck, label: '发起评审', description: '多角色并行分析，生成共识、争议点与改进建议' },
   { icon: MessageCircle, label: '进入研讨', description: '围绕评审结论继续讨论，角色主动推进重点问题' },
@@ -273,7 +273,7 @@ export default function DashboardPage() {
                 拖拽文件到此处，或点击选择文件
               </p>
               <p className="mt-1 text-xs text-gray-400">
-                支持 PDF、DOC、DOCX、Markdown、TXT，可多选文件，最大 20MB
+                支持 PDF、DOC、DOCX、WPS、Markdown、TXT，可多选文件，最大 20MB
               </p>
             </div>
             <button

@@ -29,7 +29,7 @@ export function DocumentUploadModal({ open, onClose, onUploaded }: DocumentUploa
     async (file: File) => {
       const ext = `.${file.name.split('.').pop()?.toLowerCase() || ''}`
       if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-        toast('error', `不支持的文件格式：${ext}，请上传 PDF、DOC、DOCX、MD 或 TXT`)
+        toast('error', `不支持的文件格式：${ext}，请上传 PDF、DOC、DOCX、WPS、MD 或 TXT`)
         return
       }
 
@@ -138,6 +138,7 @@ export function DocumentUploadModal({ open, onClose, onUploaded }: DocumentUploa
             <Badge variant="info">PDF</Badge>
             <Badge variant="info">DOC</Badge>
             <Badge variant="info">DOCX</Badge>
+            <Badge variant="info">WPS</Badge>
             <Badge variant="info">MD</Badge>
             <Badge variant="info">TXT</Badge>
           </div>
@@ -147,7 +148,7 @@ export function DocumentUploadModal({ open, onClose, onUploaded }: DocumentUploa
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.doc,.docx,.md,.txt"
+            accept=".pdf,.doc,.docx,.wps,.md,.txt"
             className="hidden"
             multiple
             onChange={(event) => event.target.files && handleFiles(event.target.files)}
