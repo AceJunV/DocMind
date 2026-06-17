@@ -1438,18 +1438,18 @@ function UnifiedAddModal({
 
         {/* Tab content */}
         <div className="flex-1 min-h-0 flex flex-col">
-          {tab === 'preset' && (
+          <div className={tab !== 'preset' ? 'hidden flex-1 min-h-0 flex flex-col' : 'flex-1 min-h-0 flex flex-col'}>
             <PresetAddModal initialTemplate={initialTemplate} onClose={onClose} onSaved={onSaved} embedded />
-          )}
-          {tab === 'custom' && (
+          </div>
+          <div className={tab !== 'custom' ? 'hidden flex-1 min-h-0 flex flex-col' : 'flex-1 min-h-0 flex flex-col'}>
             <CustomAddModal onClose={onClose} onSaved={onSaved} embedded />
-          )}
-          {tab === 'ai' && (
+          </div>
+          <div className={tab !== 'ai' ? 'hidden flex-1 min-h-0 flex flex-col' : 'flex-1 min-h-0 flex flex-col'}>
             <AICreateModal onClose={onClose} onSaved={onSaved} embedded />
-          )}
-          {tab === 'deep' && (
+          </div>
+          <div className={tab !== 'deep' ? 'hidden flex-1 min-h-0 flex flex-col' : 'flex-1 min-h-0 flex flex-col'}>
             <DeepCreateModal onClose={onClose} onSaved={onSaved} embedded />
-          )}
+          </div>
         </div>
       </div>
     </div>
