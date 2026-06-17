@@ -162,43 +162,6 @@ export default function DocumentDetailPage() {
 
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-[0.95fr_1.05fr]">
         <div className="space-y-4">
-          <Card className="rounded-[28px]">
-            <CardHeader>
-              <h2 className="text-sm font-semibold text-gray-900">操作</h2>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {document.status === 'ready' ? (
-                <Link to={`/reviews/create?doc=${document.id}`} className="block no-underline">
-                  <div className="rounded-2xl border border-primary-200 bg-primary-50 px-4 py-4 transition-colors hover:bg-primary-100">
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-2xl bg-white p-2.5 text-primary-600 shadow-sm">
-                        <ClipboardCheck className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-primary-700">发起评审</p>
-                        <p className="mt-1 text-xs leading-6 text-primary-600">基于当前文档直接进入角色选择和评审配置。</p>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ) : null}
-
-              {!fromReview && (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="flex w-full items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-left transition-colors hover:bg-red-100 cursor-pointer"
-              >
-                <div className="rounded-2xl bg-white p-2.5 text-red-600 shadow-sm">
-                  <Trash2 className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-red-700">删除文档</p>
-                  <p className="mt-1 text-xs leading-6 text-red-600">仅删除当前文档内容，不会自动删除既有评审记录。</p>
-                </div>
-              </button>
-            )}
-            </CardContent>
-          </Card>
 
           <Card className="rounded-[28px]">
             <CardHeader>
@@ -272,19 +235,8 @@ export default function DocumentDetailPage() {
 
         <div className="space-y-4">
         <Card className="rounded-[28px]">
-          <CardHeader className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">评审历史</h2>
-              <p className="mt-1 text-xs text-gray-500">围绕该文档已经生成过的报告，可以直接回看或继续讨论。</p>
-            </div>
-            {document.status === 'ready' ? (
-              <Link to={`/reviews/create?doc=${document.id}`} className="no-underline">
-                <Button size="sm">
-                  <ClipboardCheck className="h-4 w-4" />
-                  新建评审
-                </Button>
-              </Link>
-            ) : null}
+          <CardHeader>
+            <h2 className="text-sm font-semibold text-gray-900">评审历史</h2>
           </CardHeader>
           <CardContent>
             {reviewsForDocument.length === 0 ? (

@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, Bot, Trash2, X, RotateCcw, Recycle,
-  Download, Upload, Sparkles, Check, Dices, Send,
+  Download, Upload, Sparkles, Check, Dices, Send, Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgentStore, AGENT_COLORS, createAgentFromTemplate } from '@/stores/agentStore'
@@ -660,6 +660,51 @@ function CustomAddModal({ onClose, onSaved, embedded }: { onClose: () => void; o
   )
 }
 
+// ======================== Deep Create Prompts ========================
+
+const DEEP_CREATION_PROMPT = `你是教研评审平台的角色创建助手。通过对话帮用户创建教研案评审角色。
+
+## 回复格式（必须遵守）
+- 不使用 Markdown 符号（不要用 ** - # > 等）
+- 每轮回复分两段，中间用空行隔开：
+  第一段：1-2 句话表示理解
+  第二段：1 个追问问题
+- 每轮只问一个问题，不要同时问多个
+- 整体控制在 4 句话以内
+
+## 追问要领
+当用户描述某个特点时，顺着深挖下去，不要只问一轮就收：
+
+用户说"要严格"
+→ 问"严格具体指哪些方面？"                          ← 第1轮：了解具体表现
+→ 答"格式不规范就重写，步骤不完整就扣分"
+→ 问"对不同层次的学生，执行标准是统一的还是有弹性？"      ← 第2轮：基于新信息深入
+→ 答"基础好的从严，基础弱的放宽"
+→ 问"你一般怎么区分这两类学生？看成绩还是课堂表现？"      ← 第3轮：继续挖判断依据
+
+围绕一个方向追问 2-3 轮，确认问透了，再考虑切换话题。
+
+## 对话流程
+1. 用户说想要什么 → 表示理解 + 追问一个细节
+2. 用户回答后 → 基于新信息继续深挖同一方向（至少问 2-3 轮）
+3. 当前方向问透后 → 问"还有什么方面需要补充吗？"
+4. 用户说"差不多""就这样""可以了" → 输出 JSON
+
+需要整理已收集信息时，用纯文本格式，不要用列表符号：
+角色类型：教研老师       关注维度：课程设计
+性格风格：严谨幽默       专长领域：小学数学
+
+## 输出格式
+用户确认后，输出 JSON 对象。字段名如下：
+name, avatar, tagline, color, category, focusDimension(选填),
+personality(directness/strictness/humor/empathy 1-5),
+expertise[], behavior(style/catchphrase), system_prompt
+
+## 重要规则
+- 角色必须聚焦教研案评审，不评价课件交互和功能设计
+- 角色不限于老师/学生/家长，可以自由定义
+- 用户确认前不要输出 JSON`
+
 // ======================== AI Create Modal ========================
 
 const GUIDED_CREATION_PROMPT = `你是教研评审平台的角色创建助手。你的目标是通过**分步引导**帮教研老师创建一个教研案评审角色。
@@ -751,6 +796,58 @@ const RANDOM_AGENT_PROMPT = `你是教研评审平台的角色创建助手。请
   "system_prompt": "完整的人物设定，包含教育角色身份、说话方式和评审原则。明确不评价课件交互逻辑。"
 }`
 
+// ======================== Recommend Creation Prompt ========================
+
+export function buildRecommendCreationPrompt(title: string, content: string): string {
+  return `你是教研评审平台的角色创建助手。根据用户上传的教研案文档，创建 2 个高度匹配的临时评审角色。
+
+两个角色的定位：
+- 第一个：课程专家（Curriculum Expert）— 从课程设计的专业性角度评审
+- 第二个：教师（Teacher）— 从一线教学实践的角度评审
+
+每个角色的名称请根据文档的具体内容自动生成，要求有特色、与文档主题相关。
+
+请输出以下 JSON 格式（仅输出 JSON，不要其他内容）：
+{"agents": [{
+  "name": "根据文档内容生成的角色名（4-6个字）",
+  "creation_reason": "一句话说明为什么要推荐此角色评审这份文档，例如「针对文档中xxx知识点的抽象概念难度和学生认知负荷进行专业评审」。必须具体到文档内容，不能是通用套话。",
+  "avatar": "一个代表此角色的 emoji",
+  "tagline": "一句话角色标签（体现其专业定位）",
+  "color": "从 indigo/violet/pink/orange/teal/sky/slate/green/rose/amber/emerald/cyan 中选一个",
+  "category": "teacher",
+  "focusDimension": "课程设计/知识链/教学目标/课程重点/课程难点/学习梯度 中的一个",
+  "personality": { "directness": 1-5, "strictness": 1-5, "humor": 1-5, "empathy": 1-5 },
+  "expertise": ["专长1", "专长2", "专长3"],
+  "behavior": { "style": "说话风格描述", "catchphrase": "口头禅（有性格特色）" },
+  "system_prompt": "完整的人物设定，包含角色身份、说话方式、专业背景、评审原则。要明确不评价课件交互逻辑和功能设计，专注于教研内容。"
+}, {
+  "name": "根据文档内容生成的角色名（4-6个字）",
+  "creation_reason": "同上，必须基于文档内容具体说明评审切入点",
+  "avatar": "一个代表此角色的 emoji",
+  "tagline": "一句话角色标签（体现其专业定位）",
+  "color": "从 indigo/violet/pink/orange/teal/sky/slate/green/rose/amber/emerald/cyan 中选一个",
+  "category": "teacher",
+  "focusDimension": "课程设计/知识链/教学目标/课程重点/课程难点/学习梯度 中的一个",
+  "personality": { "directness": 1-5, "strictness": 1-5, "humor": 1-5, "empathy": 1-5 },
+  "expertise": ["专长1", "专长2", "专长3"],
+  "behavior": { "style": "说话风格描述", "catchphrase": "口头禅（有性格特色）" },
+  "system_prompt": "完整的人物设定，包含角色身份、说话方式、专业背景、评审原则。要明确不评价课件交互逻辑和功能设计，专注于教研内容。"
+}]}
+
+## 文档信息
+标题：${title}
+
+## 文档内容摘要
+${content.slice(0, 3000)}
+
+## 重要规则
+- 两个角色必须有明显区别：课程专家侧重课程设计维度，教师侧重教学实践维度
+- 角色名要和文档主题相关，不要用通用名
+- 角色必须聚焦教研案评审，不评价课件交互和功能设计
+- 每个角色的 system_prompt 要完整反映其定位和评审角度
+- creation_reason 必须基于文档内容具体说明该角色的评审切入点，不能是「该角色适合评审此文」这种通用套话，要让用户一眼明白此角色针对文档的哪个方面`
+}
+
 interface AIMsg { role: 'ai' | 'user'; content: string }
 
 function parseAgentJSON(text: string) {
@@ -761,6 +858,16 @@ function parseAgentJSON(text: string) {
     if (!parsed.name || !parsed.personality) return null
     return parsed
   } catch { return null }
+}
+
+export function parseAgentsJSON(text: string): Agent[] {
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) return []
+    const parsed = JSON.parse(jsonMatch[0])
+    if (!parsed.agents || !Array.isArray(parsed.agents)) return []
+    return parsed.agents.filter((a: Record<string, unknown>) => a.name && a.personality)
+  } catch { return [] }
 }
 
 function AICreateModal({ onClose, onSaved, embedded }: { onClose: () => void; onSaved: () => void; embedded?: boolean }) {
@@ -1020,9 +1127,265 @@ function AICreateModal({ onClose, onSaved, embedded }: { onClose: () => void; on
   )
 }
 
+// ======================== Deep Create Modal ========================
+
+function DeepCreateModal({ onClose, onSaved, embedded }: { onClose: () => void; onSaved: () => void; embedded?: boolean }) {
+  const { user } = useAuthStore()
+  const addAgent = useAgentStore((s) => s.addAgent)
+  const config = useSettingsStore((s) => s.currentConfig)
+  const hasValidConfig = isModelConfigValid(config)
+
+  const [messages, setMessages] = useState<AIMsg[]>([
+    { role: 'ai', content: '你好！请自由描述你想要创建的教研评审角色 🎭\n\n比如你想创建一个什么样的角色？它有什么特点？关注什么方面？都可以告诉我。' },
+  ])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const [preview, setPreview] = useState<{
+    name: string; avatar: string; tagline: string; color: AgentColor
+    category?: AgentCategory; focusDimension?: string
+    personality: { directness: number; strictness: number; humor: number; empathy: number }
+    expertise: string[]; behavior: { style: string; catchphrase: string }; system_prompt: string
+  } | null>(null)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
+
+  const processLLMResponse = (text: string) => {
+    const parsed = parseAgentJSON(text)
+    if (parsed) {
+      const validColor = ALL_COLORS.includes(parsed.color) ? parsed.color : ALL_COLORS[Math.floor(Math.random() * ALL_COLORS.length)]
+      setPreview({
+        name: parsed.name, avatar: parsed.avatar || '🤖', tagline: parsed.tagline || '',
+        color: validColor as AgentColor,
+        category: (['teacher', 'student', 'parent'].includes(parsed.category) ? parsed.category : 'teacher') as AgentCategory,
+        focusDimension: parsed.focusDimension || undefined,
+        personality: {
+          directness: Math.min(5, Math.max(1, parsed.personality?.directness || 3)),
+          strictness: Math.min(5, Math.max(1, parsed.personality?.strictness || 3)),
+          humor: Math.min(5, Math.max(1, parsed.personality?.humor || 3)),
+          empathy: Math.min(5, Math.max(1, parsed.personality?.empathy || 3)),
+        },
+        expertise: parsed.expertise || [],
+        behavior: { style: parsed.behavior?.style || '', catchphrase: parsed.behavior?.catchphrase || '' },
+        system_prompt: parsed.system_prompt || '',
+      })
+      setMessages((prev) => [...prev, {
+        role: 'ai', content: `角色「${parsed.name}」已生成！\n\n请在右侧预览卡片中查看详情。如果满意，点击"保存角色"即可。\n\n不满意？继续告诉我哪里需要调整。`,
+      }])
+    } else {
+      setMessages((prev) => [...prev, { role: 'ai', content: text || '生成失败，请重新描述。' }])
+    }
+  }
+
+  const handleSend = async () => {
+    if (!input.trim() || loading) return
+    const userMsg = input.trim()
+    setInput('')
+    setMessages((prev) => [...prev, { role: 'user', content: userMsg }])
+    setLoading(true)
+
+    if (!hasValidConfig) {
+      setMessages((prev) => [...prev, { role: 'ai', content: '你还没有配置 API Key，请先到「设置」页面配置模型和 API Key。\n\n配置完成后回来继续创建角色。' }])
+      setLoading(false)
+      return
+    }
+
+    const conversationMsgs = messages.concat([{ role: 'user', content: userMsg }]).map((m) => ({
+      role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.content,
+    }))
+
+    try {
+      await chatCompletion(
+        [{ role: 'system', content: DEEP_CREATION_PROMPT }, ...conversationMsgs],
+        {
+          onChunk: () => {},
+          onDone: (text) => {
+            processLLMResponse(text)
+            setLoading(false)
+          },
+          onError: (err) => {
+            setMessages((prev) => [...prev, { role: 'ai', content: `出错了：${err.message}` }])
+            setLoading(false)
+          },
+        }
+      )
+    } catch (err) {
+      const message = err instanceof LLMError ? err.message : '请求失败，请检查网络连接'
+      setMessages((prev) => [...prev, { role: 'ai', content: message }])
+      setLoading(false)
+    }
+  }
+
+  const handleSave = () => {
+    if (!preview) return
+    const agent: Agent = {
+      id: createId(), owner_id: user?.id || '',
+      name: preview.name, avatar: preview.avatar, tagline: preview.tagline,
+      personality: preview.personality, expertise: preview.expertise, behavior: preview.behavior,
+      system_prompt: preview.system_prompt, source: 'custom', is_public: false, usage_count: 0,
+      color: preview.color, category: preview.category,
+      focusDimension: preview.focusDimension as Agent['focusDimension'],
+      creation_history: messages.map((m) => ({ role: m.role, content: m.content })),
+      created_at: new Date().toISOString(),
+    }
+    addAgent(agent)
+    toast('success', `角色「${preview.name}」已保存！`)
+    onSaved()
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+  }
+
+  const categoryLabels: Record<string, string> = { teacher: '教研老师', student: '学生', parent: '家长' }
+
+  const innerContent = (
+    <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex flex-col border-r border-gray-100">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap leading-relaxed ${
+                msg.role === 'user' ? 'bg-primary-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-700 rounded-tl-sm'
+              }`}>
+                {msg.content}
+              </div>
+            </div>
+          ))}
+          {loading && (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm text-gray-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                思考中...
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        {!preview && (
+          <div className="border-t border-gray-100 p-3">
+            <div className="flex gap-2">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="描述你想要的角色..."
+                className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-400"
+                disabled={loading}
+              />
+              <button
+                onClick={handleSend}
+                disabled={loading || !input.trim()}
+                className="flex items-center gap-1 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer border-0"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                发送
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Preview Panel */}
+      <div className="w-72 shrink-0 flex flex-col">
+        <div className="flex-1 overflow-y-auto p-4">
+          {preview ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full text-2xl" style={{ backgroundColor: `${AGENT_COLORS[preview.color]}15` }}>
+                  {preview.avatar}
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">{preview.name}</h3>
+                  <p className="text-xs text-gray-500">{preview.tagline}</p>
+                </div>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-gray-400">类别</span>
+                <p className="text-sm text-gray-700">{categoryLabels[preview.category || 'teacher']}</p>
+              </div>
+              {preview.focusDimension && (
+                <div>
+                  <span className="text-xs font-medium text-gray-400">关注维度</span>
+                  <p className="text-sm text-gray-700">{preview.focusDimension}</p>
+                </div>
+              )}
+              <div>
+                <span className="text-xs font-medium text-gray-400">性格</span>
+                <div className="mt-1 space-y-1">
+                  {[
+                    { label: '直接度', value: preview.personality.directness },
+                    { label: '严谨度', value: preview.personality.strictness },
+                    { label: '幽默度', value: preview.personality.humor },
+                    { label: '共情度', value: preview.personality.empathy },
+                  ].map((item) => (
+                    <div key={item.label} className="flex items-center gap-2 text-xs">
+                      <span className="w-10 text-gray-500">{item.label}</span>
+                      <div className="flex gap-0.5">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <div key={star} className={`h-1.5 w-3 rounded-full ${star <= item.value ? 'bg-primary-500' : 'bg-gray-200'}`} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-gray-400">专长</span>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {preview.expertise.map((e) => (
+                    <span key={e} className="rounded-full bg-primary-50 px-2 py-0.5 text-xs text-primary-600">{e}</span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-gray-400">说话风格</span>
+                <p className="text-sm text-gray-700">{preview.behavior.style}</p>
+              </div>
+              {preview.behavior.catchphrase && (
+                <div>
+                  <span className="text-xs font-medium text-gray-400">口头禅</span>
+                  <p className="text-sm italic text-gray-600">"{preview.behavior.catchphrase}"</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-xs text-gray-400 text-center leading-relaxed">角色生成后<br/>在这里预览</p>
+            </div>
+          )}
+        </div>
+        {preview && (
+          <div className="border-t border-gray-100 p-3">
+            <button
+              onClick={handleSave}
+              className="w-full rounded-lg bg-primary-600 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors cursor-pointer border-0"
+            >
+              保存角色
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      {embedded ? (
+        innerContent
+      ) : (
+        <div className="flex-1 flex flex-col min-h-0">{innerContent}</div>
+      )}
+    </div>
+  )
+}
+
 // ======================== Unified Add Modal ========================
 
-type AddAgentTab = 'preset' | 'custom' | 'ai'
+type AddAgentTab = 'preset' | 'custom' | 'ai' | 'deep'
 
 function UnifiedAddModal({
   initialTab = 'preset',
@@ -1041,6 +1404,7 @@ function UnifiedAddModal({
     { key: 'preset', label: '📋 预设模板' },
     { key: 'custom', label: '✏️ 自定义' },
     { key: 'ai', label: '🤖 AI 生成' },
+    { key: 'deep', label: '🎯 深度创角' },
   ]
 
   return (
@@ -1083,6 +1447,9 @@ function UnifiedAddModal({
           {tab === 'ai' && (
             <AICreateModal onClose={onClose} onSaved={onSaved} embedded />
           )}
+          {tab === 'deep' && (
+            <DeepCreateModal onClose={onClose} onSaved={onSaved} embedded />
+          )}
         </div>
       </div>
     </div>
@@ -1100,6 +1467,9 @@ export default function AgentListPage() {
   const templateVisibility = useAgentStore((s) => s.templateVisibility)
   const setTemplateVisibility = useAgentStore((s) => s.setTemplateVisibility)
   const agents = useAgentStore((s) => s.agents)
+  const tempAgents = useAgentStore((s) => s.tempAgents)
+  const regularizeTempAgent = useAgentStore((s) => s.regularizeTempAgent)
+  const removeTempAgent = useAgentStore((s) => s.removeTempAgent)
   const trashedAgents = useAgentStore((s) => s.trashedAgents)
   const removeAgent = useAgentStore((s) => s.removeAgent)
   const updateAgent = useAgentStore((s) => s.updateAgent)
@@ -1338,6 +1708,61 @@ export default function AgentListPage() {
               </div>
             )}
           </div>
+
+          {/* Temp Roles Section */}
+          {tempAgents.length > 0 && (
+            <div className="mt-8">
+              <div className="flex items-center gap-2 mb-4">
+                <Sparkles className="h-5 w-5 text-amber-500" />
+                <h2 className="text-base font-semibold text-gray-900">临时评委</h2>
+                <span className="text-xs text-amber-500">{tempAgents.length} 个角色</span>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {tempAgents.map((agent) => (
+                  <div key={agent.id} className="relative rounded-2xl border border-amber-200 bg-amber-50/40 p-4">
+                    {/* temp badge */}
+                    <div className="absolute -top-2 -right-2 rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm">
+                      临时
+                    </div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className={cn(
+                        'flex h-10 w-10 items-center justify-center rounded-xl text-lg font-bold text-white',
+                        AGENT_COLORS[agent.color]?.replace('border-', 'bg-').replace(/ \w+-\d+/, '')
+                      )}>
+                        {agent.avatar || agent.name[0]}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-gray-900">{agent.name}</p>
+                        <p className="truncate text-xs text-gray-500">{agent.tagline}</p>
+                      </div>
+                    </div>
+                    {agent.reviewed_doc_title && (
+                      <p className="mb-2 text-xs text-gray-400">
+                        关联文档：{agent.reviewed_doc_title}
+                      </p>
+                    )}
+                    <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-gray-600">
+                      {agent.system_prompt?.slice(0, 80)}...
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { regularizeTempAgent(agent.id); toast('success', `${agent.name} 已转为永久角色`) }}
+                        className="rounded-lg bg-primary-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-primary-700 cursor-pointer border-0"
+                      >
+                        转正
+                      </button>
+                      <button
+                        onClick={() => { removeTempAgent(agent.id); toast('success', `${agent.name} 已移入回收站`) }}
+                        className="rounded-lg border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 cursor-pointer bg-white"
+                      >
+                        移除
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1354,18 +1779,26 @@ export default function AgentListPage() {
             <div>
               <h3 className="text-sm font-medium text-gray-500 mb-3">已删除的角色 ({trashedAgents.length})</h3>
               <div className="space-y-2">
-                {trashedAgents.map((agent) => {
-                  const borderColor = AGENT_COLORS[agent.color]
-                  return (
-                    <div key={agent.id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full text-xl shrink-0 opacity-60"
-                        style={{ backgroundColor: borderColor + '15' }}>
-                        {agent.avatar || agent.name[0]}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-medium text-gray-700">{agent.name}</h4>
-                        <p className="text-xs text-gray-500">{agent.tagline}</p>
-                      </div>
+                  {trashedAgents.map((agent) => {
+                    const borderColor = AGENT_COLORS[agent.color]
+                    return (
+                      <div key={agent.id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full text-xl shrink-0 opacity-60"
+                          style={{ backgroundColor: borderColor + '15' }}>
+                          {agent.avatar || agent.name[0]}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-medium text-gray-700">{agent.name}</h4>
+                          <p className="text-xs text-gray-500">{agent.tagline}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-400">
+                            {agent.created_at && (
+                              <span>创建：{new Date(agent.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}</span>
+                            )}
+                            {agent.reviewed_doc_title && (
+                              <span className="truncate max-w-[200px]" title={agent.reviewed_doc_title}>文档：{agent.reviewed_doc_title}</span>
+                            )}
+                          </div>
+                        </div>
                       <div className="flex gap-2 shrink-0">
                         <button onClick={() => handleRestoreAgent(agent)}
                           className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer bg-white">

@@ -67,10 +67,11 @@ export default function ChatRoomConfigModal({
   const addMessage = useChatStore((s) => s.addMessage)
   const markAsDiscussed = useReviewBookmarkStore((s) => s.markAsDiscussed)
   const agents = useAgentStore((s) => s.agents)
+  const tempAgents = useAgentStore((s) => s.tempAgents)
   const templates = useAgentStore((s) => s.templates)
   const templateVisibility = useAgentStore((s) => s.templateVisibility)
 
-  const visibleAgents = useMemo(() => agents.filter((a) => a.visibleInReview !== false), [agents])
+  const visibleAgents = useMemo(() => [...agents, ...tempAgents].filter((a) => a.visibleInReview !== false), [agents, tempAgents])
   const visibleTemplates = useMemo(
     () => templates.filter((t) => templateVisibility[t.id] !== false),
     [templates, templateVisibility]
@@ -149,7 +150,7 @@ export default function ChatRoomConfigModal({
             } as const
           }
         }
-        const agent = agents.find((a) => a.id === id)
+        const agent = agents.find((a) => a.id === id) ?? tempAgents.find((a) => a.id === id)
         return agent
           ? {
               id: agent.id,

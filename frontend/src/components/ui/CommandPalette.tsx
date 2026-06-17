@@ -55,7 +55,10 @@ export function CommandPalette({ open, onClose }: Props) {
     return [...docItems, ...agentItems, ...reviewItems]
   }, [documents, agents, reviews])
 
-  const allCommands = useMemo(() => [...STATIC_COMMANDS, ...dynamicCommands], [dynamicCommands])
+  const allCommands = useMemo(() => {
+    const commands = [...STATIC_COMMANDS, ...dynamicCommands]
+    return commands.filter((c) => c.id !== 'nav-documents' && c.category !== '文档')
+  }, [dynamicCommands])
 
   const filtered = useMemo(() => {
     if (!query.trim()) return allCommands.slice(0, 12)
@@ -121,7 +124,7 @@ export function CommandPalette({ open, onClose }: Props) {
               setQuery(e.target.value)
               setActiveIndex(0)
             }}
-            placeholder="搜索文档、角色、页面..."
+            placeholder="搜索角色、评审、页面..."
             className="flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
           />
           <kbd className="hidden sm:inline-flex items-center rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-400">ESC</kbd>

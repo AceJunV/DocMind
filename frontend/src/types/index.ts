@@ -93,7 +93,7 @@ export interface Agent {
     catchphrase?: string
   }
   system_prompt: string
-  source: 'custom' | 'template' | 'community'
+  source: 'custom' | 'template' | 'community' | 'temp'
   is_public: boolean
   usage_count: number
   color: AgentColor
@@ -103,6 +103,9 @@ export interface Agent {
   creation_history?: { role: 'ai' | 'user'; content: string }[]
   last_used_at?: string
   created_at: string
+  reviewed_doc_id?: string
+  reviewed_doc_title?: string
+  creation_reason?: string
 }
 
 export type AgentCategory = 'teacher' | 'student' | 'parent'

@@ -286,6 +286,7 @@ interface AgentState {
   templates: AgentTemplate[]
   templateVisibility: Record<string, boolean>
   trashedAgents: Agent[]
+  tempAgents: Agent[]
 
   addAgent: (agent: Agent) => void
   removeAgent: (id: string) => void
@@ -297,6 +298,10 @@ interface AgentState {
 
   restoreAgent: (id: string) => void
   permanentlyDeleteAgent: (id: string) => void
+
+  setTempAgents: (agents: Agent[]) => void
+  regularizeTempAgent: (id: string) => void
+  removeTempAgent: (id: string) => void
 }
 
 export const useAgentStore = create<AgentState>()(
@@ -306,6 +311,7 @@ export const useAgentStore = create<AgentState>()(
       templates: PRESET_TEMPLATES,
       templateVisibility: {},
       trashedAgents: [],
+      tempAgents: [],
 
       addAgent: (agent) => {
         set((state) => ({ agents: [agent, ...state.agents] }))
@@ -343,6 +349,9 @@ export const useAgentStore = create<AgentState>()(
           agents: state.agents.map((a) =>
             a.id === id ? { ...a, usage_count: a.usage_count + 1, last_used_at: new Date().toISOString() } : a
           ),
+          tempAgents: state.tempAgents.map((a) =>
+            a.id === id ? { ...a, usage_count: a.usage_count + 1, last_used_at: new Date().toISOString() } : a
+          ),
         }))
       },
 
@@ -355,15 +364,49 @@ export const useAgentStore = create<AgentState>()(
       restoreAgent: (id) => {
         const agent = get().trashedAgents.find((a) => a.id === id)
         if (!agent) return
-        set((state) => ({
-          agents: [agent, ...state.agents],
-          trashedAgents: state.trashedAgents.filter((a) => a.id !== id),
-        }))
+        if (agent.source === 'temp') {
+          set((state) => ({
+            agents: [{ ...agent, source: 'custom' as const }, ...state.agents],
+            trashedAgents: state.trashedAgents.filter((a) => a.id !== id),
+          }))
+        } else {
+          set((state) => ({
+            agents: [agent, ...state.agents],
+            trashedAgents: state.trashedAgents.filter((a) => a.id !== id),
+          }))
+        }
       },
 
       permanentlyDeleteAgent: (id) => {
         set((state) => ({
           trashedAgents: state.trashedAgents.filter((a) => a.id !== id),
+        }))
+      },
+
+      setTempAgents: (agents) => {
+        const state = get()
+        const oldTemps = state.tempAgents
+        set({
+          tempAgents: agents.slice(0, 2),
+          trashedAgents: [...oldTemps, ...state.trashedAgents],
+        })
+      },
+
+      regularizeTempAgent: (id) => {
+        const agent = get().tempAgents.find((a) => a.id === id)
+        if (!agent) return
+        set((state) => ({
+          tempAgents: state.tempAgents.filter((a) => a.id !== id),
+          agents: [{ ...agent, source: 'custom' as const }, ...state.agents],
+        }))
+      },
+
+      removeTempAgent: (id) => {
+        const agent = get().tempAgents.find((a) => a.id === id)
+        if (!agent) return
+        set((state) => ({
+          tempAgents: state.tempAgents.filter((a) => a.id !== id),
+          trashedAgents: [agent, ...state.trashedAgents],
         }))
       },
     }),
@@ -373,6 +416,7 @@ export const useAgentStore = create<AgentState>()(
         agents: state.agents,
         templateVisibility: state.templateVisibility,
         trashedAgents: state.trashedAgents,
+        tempAgents: state.tempAgents,
       }),
       merge: (persisted, current) => ({
         ...current,

@@ -7,16 +7,19 @@ import {
   ClipboardCheck,
   FileText,
   GitCompare,
+  Lightbulb,
   Loader2,
   Play,
   Plus,
   Sparkles,
+  WandSparkles,
+  X,
   XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDocumentStore } from '@/stores/documentStore'
 import { useAgentStore, AGENT_COLORS, buildSystemPrompt } from '@/stores/agentStore'
-import { UnifiedAddModal } from '@/pages/agents/AgentListPage'
+import { buildRecommendCreationPrompt, parseAgentsJSON, UnifiedAddModal } from '@/pages/agents/AgentListPage'
 import { useReviewStore } from '@/stores/reviewStore'
 import { useAuthStore } from '@/stores/authStore'
 import { isModelConfigValid, useSettingsStore } from '@/stores/settingsStore'
@@ -27,6 +30,7 @@ import {
   generateTifenReport,
   generateSummary,
 } from '@/services/reviewEngine'
+import { chatCompletion } from '@/services/llmService'
 import { toast } from '@/components/ui/Toast'
 import { createId } from '@/utils/id'
 import type { Agent, AgentReview, AgentTemplate, CompareReviewReport, DiffPointReview, DiffResult, Review, ReviewMode, TeachingDimension } from '@/types'
@@ -490,18 +494,22 @@ export default function ReviewCreatePage() {
   const { user } = useAuthStore()
   const allDocuments = useDocumentStore((state) => state.documents)
   const documents = useMemo(() => allDocuments.filter((document) => document.status === 'ready'), [allDocuments])
+  const addDocument = useDocumentStore((state) => state.addDocument)
   const removeDocument = useDocumentStore((state) => state.removeDocument)
   const updateDocument = useDocumentStore((state) => state.updateDocument)
   const registerCleanupDocs = useDocumentStore((state) => state.registerCleanupDocs)
   const cancelCleanup = useDocumentStore((state) => state.cancelCleanup)
   const incrementReviewCount = useDocumentStore((state) => state.incrementReviewCount)
   const agents = useAgentStore((state) => state.agents)
+  const tempAgents = useAgentStore((state) => state.tempAgents)
+  const setTempAgents = useAgentStore((state) => state.setTempAgents)
   const templates = useAgentStore((state) => state.templates)
   const templateVisibility = useAgentStore((state) => state.templateVisibility)
   const incrementUsage = useAgentStore((state) => state.incrementUsage)
   const addReview = useReviewStore((state) => state.addReview)
   const updateReview = useReviewStore((state) => state.updateReview)
   const removeReview = useReviewStore((state) => state.removeReview)
+  const reviews = useReviewStore((state) => state.reviews)
   const config = useSettingsStore((state) => state.currentConfig)
   const hasValidConfig = isModelConfigValid(config)
 
@@ -523,10 +531,37 @@ export default function ReviewCreatePage() {
 
   const [showAddAgentModal, setShowAddAgentModal] = useState(false)
 
-  const visibleAgents = useMemo(() => agents.filter((a) => a.visibleInReview !== false), [agents])
+  const [recommendModalOpen, setRecommendModalOpen] = useState(false)
+  const [recommendAgents, setRecommendAgents] = useState<Agent[]>([])
+  const [recommendLoading, setRecommendLoading] = useState(false)
+
+  const visibleAgents = useMemo(() => {
+    const regular = agents.filter((a) => a.visibleInReview !== false)
+    const temps = tempAgents.filter((a) => a.visibleInReview !== false)
+    return [...regular, ...temps]
+  }, [agents, tempAgents])
   const visibleTemplates = useMemo(() => templates.filter((t) => templateVisibility[t.id] !== false), [templates, templateVisibility])
 
   const selectedDoc = documents.find((document) => document.id === selectedDocId)
+    || (preselectedDocId ? reviews.find((r) => r.document_id === preselectedDocId)?.document : undefined)
+
+  // 通过评审记录找回文档时，同步补回 documentStore 供 UI 列表展示
+  useEffect(() => {
+    if (!selectedDoc || !preselectedDocId) return
+
+    const alreadyVisible = documents.some((d) => d.id === preselectedDocId)
+    if (alreadyVisible) return
+
+    const docInAll = allDocuments.find((d) => d.id === preselectedDocId)
+    if (docInAll) {
+      // 文档已在 store 中但状态非 'ready'（如 'reviewed'），恢复为可选中状态
+      updateDocument(preselectedDocId, { status: 'ready' })
+    } else {
+      // 文档已被彻底清理，从评审记录中补回
+      addDocument(selectedDoc)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const selectedAgentEntries = useMemo(() => {
     const entries: Array<{ type: 'agent'; agent: Agent } | { type: 'template'; template: AgentTemplate }> = []
     for (const id of selectedAgentIds) {
@@ -534,12 +569,12 @@ export default function ReviewCreatePage() {
         const tpl = templates.find((t) => t.id === id.slice(4))
         if (tpl) entries.push({ type: 'template', template: tpl })
       } else {
-        const agent = agents.find((a) => a.id === id)
+        const agent = agents.find((a) => a.id === id) || tempAgents.find((a) => a.id === id)
         if (agent) entries.push({ type: 'agent', agent })
       }
     }
     return entries
-  }, [selectedAgentIds, agents, templates])
+  }, [selectedAgentIds, agents, tempAgents, templates])
   const selectedAgents = selectedAgentEntries.map((e) => {
     if (e.type === 'agent') return e.agent
     const t = e.template
@@ -620,6 +655,58 @@ export default function ReviewCreatePage() {
     if (allIds.length < agentIds.length + tplIds.length) {
       toast('info', `最多选择 ${MAX_REVIEW_AGENTS} 个角色，已选择前 ${MAX_REVIEW_AGENTS} 个`)
     }
+  }
+
+  const handleRecommendCreate = async () => {
+    if (!selectedDoc || !selectedDoc.raw_content) {
+      toast('error', '文档内容为空，无法分析')
+      return
+    }
+
+    setRecommendLoading(true)
+    setRecommendModalOpen(true)
+
+    try {
+      const prompt = buildRecommendCreationPrompt(selectedDoc.title, selectedDoc.raw_content)
+      const agentsResult: Agent[] = []
+
+      await chatCompletion(
+        [{ role: 'user', content: prompt }],
+        {
+          onChunk: () => {},
+          onDone: (text) => {
+            const parsed = parseAgentsJSON(text)
+            if (parsed.length >= 2) {
+              const now = new Date().toISOString()
+              parsed.forEach((a, i) => {
+                a.id = `temp-${createId()}-${i}`
+                a.source = 'temp'
+                a.created_at = now
+                a.reviewed_doc_id = selectedDoc.id
+                a.reviewed_doc_title = selectedDoc.title
+              })
+              agentsResult.push(...parsed)
+            }
+            setRecommendAgents(agentsResult.slice(0, 2))
+            setRecommendLoading(false)
+          },
+          onError: () => {
+            setRecommendLoading(false)
+            toast('error', '角色生成失败，请重试')
+          },
+        }
+      )
+    } catch {
+      setRecommendLoading(false)
+      toast('error', '请求失败，请检查网络连接')
+    }
+  }
+
+  const handleRecommendConfirm = () => {
+    if (recommendAgents.length === 0) return
+    setTempAgents(recommendAgents)
+    setRecommendModalOpen(false)
+    toast('success', '已根据文档内容深度创建评委')
   }
 
   const oldCompareDoc = documents.find((d) => d.id === oldDocId)
@@ -1338,6 +1425,14 @@ export default function ReviewCreatePage() {
                 <h2 className="mt-2 text-lg font-semibold text-gray-900">选择评审角色</h2>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={handleRecommendCreate}
+                  disabled={!selectedDoc}
+                  title={!selectedDoc ? '请先选择文档' : ''}
+                  className="inline-flex items-center gap-1 rounded-full bg-primary-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-primary-700 cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <WandSparkles className="h-3 w-3" /> 推荐创建
+                </button>
                 {(visibleAgents.length > 0 || visibleTemplates.length > 0) && (
                   <button
                     onClick={selectedAgentIds.length > 0 ? () => setSelectedAgentIds([]) : selectAllAgents}
@@ -1486,6 +1581,186 @@ export default function ReviewCreatePage() {
           onSaved={() => setShowAddAgentModal(false)}
         />
       )}
+
+      <RecommendCreateModal
+        open={recommendModalOpen}
+        agents={recommendAgents}
+        loading={recommendLoading}
+        onRegenerate={handleRecommendCreate}
+        onConfirm={handleRecommendConfirm}
+        onClose={() => { setRecommendModalOpen(false); setRecommendAgents([]) }}
+      />
+    </div>
+  )
+}
+
+// ======================== Recommend Create Modal ========================
+
+interface RecommendCreateModalProps {
+  open: boolean
+  agents: Agent[]
+  loading: boolean
+  onRegenerate: () => void
+  onConfirm: () => void
+  onClose: () => void
+}
+
+function RecommendCreateModal({ open, agents, loading, onRegenerate, onConfirm, onClose }: RecommendCreateModalProps) {
+  if (!open) return null
+
+  const categoryLabels: Record<string, string> = { teacher: '教研老师', student: '学生', parent: '家长' }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full max-w-2xl max-h-[85vh] rounded-xl bg-white shadow-2xl mx-4 flex flex-col animate-slide-up"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <WandSparkles className="h-5 w-5 text-primary-600" />
+            <h3 className="text-lg font-semibold text-gray-900">推荐评审角色</h3>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 bg-transparent border-0 cursor-pointer">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+              <p className="text-sm text-gray-500">正在根据文档内容创建角色...</p>
+            </div>
+          ) : agents.length === 0 ? (
+            <div className="py-12 text-center text-sm text-gray-500">生成失败，请点击「重新」按钮重试</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {agents.map((agent) => {
+                const borderColor = AGENT_COLORS[agent.color]
+                return (
+                  <div key={agent.id} className="rounded-xl border border-gray-200 overflow-hidden">
+                      <div className="p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="flex h-12 w-12 items-center justify-center rounded-full text-xl shrink-0"
+                          style={{ backgroundColor: `${borderColor}15`, boxShadow: `0 0 0 2px ${borderColor}` }}
+                        >
+                          {agent.avatar || agent.name[0]}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-semibold text-gray-900 truncate">{agent.name}</h4>
+                          <p className="text-xs text-gray-500 truncate">{agent.tagline}</p>
+                        </div>
+                      </div>
+
+                      {agent.creation_reason && (
+                        <div className="rounded-lg bg-amber-50 border border-amber-200 pl-3 pr-3 py-2.5">
+                          <div className="flex items-start gap-2">
+                            <Lightbulb className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
+                            <p className="text-xs leading-relaxed text-amber-800">{agent.creation_reason}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {agent.focusDimension && (
+                        <div>
+                          <span className="text-[10px] font-medium text-gray-400 uppercase">关注维度</span>
+                          <p className="text-xs text-gray-700 mt-0.5">{agent.focusDimension}</p>
+                        </div>
+                      )}
+
+                      <div>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase">性格参数</span>
+                        <div className="mt-1 space-y-1">
+                          {[
+                            { label: '直接度', value: agent.personality.directness },
+                            { label: '严谨度', value: agent.personality.strictness },
+                            { label: '幽默度', value: agent.personality.humor },
+                            { label: '共情度', value: agent.personality.empathy },
+                          ].map((item) => (
+                            <div key={item.label} className="flex items-center gap-2">
+                              <span className="text-[10px] text-gray-500 w-8">{item.label}</span>
+                              <div className="flex gap-0.5 flex-1">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <div
+                                    key={star}
+                                    className={`h-1.5 w-full rounded-full ${star <= item.value ? 'bg-primary-500' : 'bg-gray-200'}`}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {agent.expertise.length > 0 && (
+                        <div>
+                          <span className="text-[10px] font-medium text-gray-400 uppercase">专长</span>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {agent.expertise.map((e) => (
+                              <span key={e} className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] text-primary-600">{e}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase">说话风格</span>
+                        <p className="text-xs text-gray-700 mt-0.5">{agent.behavior.style}</p>
+                      </div>
+
+                      {agent.behavior.catchphrase && (
+                        <div>
+                          <span className="text-[10px] font-medium text-gray-400 uppercase">口头禅</span>
+                          <p className="text-xs italic text-gray-600 mt-0.5">&ldquo;{agent.behavior.catchphrase}&rdquo;</p>
+                        </div>
+                      )}
+
+                      {agent.system_prompt && (
+                        <div>
+                          <span className="text-[10px] font-medium text-gray-400 uppercase">角色设定摘要</span>
+                          <p className="text-[10px] text-gray-500 mt-0.5 leading-relaxed line-clamp-3">{agent.system_prompt}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="border-t border-gray-100 px-4 py-2 bg-gray-50/50">
+                      <span className="text-[10px] text-gray-400">
+                        {categoryLabels[agent.category || 'teacher'] || agent.category} · 临时
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-gray-100 px-5 py-3 flex items-center justify-between">
+          <button
+            onClick={onRegenerate}
+            disabled={loading}
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            重新
+          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer bg-white"
+            >
+              取消
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={agents.length === 0 || loading}
+              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              确认
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

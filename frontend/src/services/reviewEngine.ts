@@ -465,7 +465,7 @@ export async function executeTeachingEvalReview(
   signal?: AbortSignal,
 ): Promise<AgentReview> {
   const docContent = doc.raw_content || '(文档内容为空)'
-  const truncatedContent = docContent.slice(0, MAX_DOC_CONTENT)
+  const truncatedContent = docContent.slice(0, MAX_DOC_CONTENT).replace(/!\[.*?\]\(.*?\)/g, '')
   const teachingContext = buildTeachingContext(doc)
   const structuredSections = buildStructuredSections(doc)
 

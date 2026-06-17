@@ -349,10 +349,11 @@ async function parseTxt(file: File): Promise<ParseResult> {
 async function parseMd(file: File): Promise<ParseResult> {
   const text = await readTextFile(file)
   assertReadableText(text, 'Markdown')
-  const sections = splitMarkdownSections(text)
-  const teaching_plan = extractTeachingPlanFields(text)
+  const cleaned = text.replace(/!\[.*?\]\(.*?\)/g, '').trim()
+  const sections = splitMarkdownSections(cleaned)
+  const teaching_plan = extractTeachingPlanFields(cleaned)
   return {
-    raw_content: text,
+    raw_content: cleaned,
     structured_content: { sections },
     word_count: countWords(text),
     teaching_plan,
