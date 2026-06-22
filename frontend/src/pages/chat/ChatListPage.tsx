@@ -180,8 +180,10 @@ export default function ChatListPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {roomMessages.length} 条消息
+                      <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-2">
+                        <span>{roomMessages.length} 条消息</span>
+                        <span className="text-gray-300">·</span>
+                        <span>{new Date(room.created_at).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                       </p>
                     </div>
                     <div className="flex items-center gap-2 pointer-events-auto">

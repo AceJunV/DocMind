@@ -527,6 +527,7 @@ export default function ReviewCreatePage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const abortRef = useRef<AbortController | null>(null)
   const cancelledRef = useRef(false)
+  const reviewStartedRef = useRef(false)
   const dimTimersRef = useRef<Record<string, ReturnType<typeof setInterval>>>({})
 
   const [showAddAgentModal, setShowAddAgentModal] = useState(false)
@@ -534,13 +535,19 @@ export default function ReviewCreatePage() {
   const [recommendModalOpen, setRecommendModalOpen] = useState(false)
   const [recommendAgents, setRecommendAgents] = useState<Agent[]>([])
   const [recommendLoading, setRecommendLoading] = useState(false)
+  const [hasRecommended, setHasRecommended] = useState(false)
 
-  const visibleAgents = useMemo(() => {
-    const regular = agents.filter((a) => a.visibleInReview !== false)
-    const temps = tempAgents.filter((a) => a.visibleInReview !== false)
-    return [...regular, ...temps]
-  }, [agents, tempAgents])
+  const visibleTempAgents = useMemo(() => {
+    return tempAgents.filter((a) => a.visibleInReview !== false)
+  }, [tempAgents])
+  const visibleRegularAgents = useMemo(() => {
+    return agents.filter((a) => a.visibleInReview !== false)
+  }, [agents])
   const visibleTemplates = useMemo(() => templates.filter((t) => templateVisibility[t.id] !== false), [templates, templateVisibility])
+
+  const hasVisibleContent = useMemo(() => {
+    return (visibleTempAgents.length > 0 && hasRecommended) || visibleRegularAgents.length > 0 || visibleTemplates.length > 0
+  }, [visibleTempAgents, hasRecommended, visibleRegularAgents, visibleTemplates])
 
   const selectedDoc = documents.find((document) => document.id === selectedDocId)
     || (preselectedDocId ? reviews.find((r) => r.document_id === preselectedDocId)?.document : undefined)
@@ -554,11 +561,20 @@ export default function ReviewCreatePage() {
 
     const docInAll = allDocuments.find((d) => d.id === preselectedDocId)
     if (docInAll) {
-      // 文档已在 store 中但状态非 'ready'（如 'reviewed'），恢复为可选中状态
+      const originalStatus = docInAll.status
       updateDocument(preselectedDocId, { status: 'ready' })
+      return () => {
+        if (!reviewStartedRef.current) {
+          updateDocument(preselectedDocId, { status: originalStatus })
+        }
+      }
     } else {
-      // 文档已被彻底清理，从评审记录中补回
       addDocument(selectedDoc)
+      return () => {
+        if (!reviewStartedRef.current) {
+          removeDocument(preselectedDocId)
+        }
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -648,7 +664,7 @@ export default function ReviewCreatePage() {
   }
 
   const selectAllAgents = () => {
-    const agentIds = visibleAgents.map((a) => a.id)
+    const agentIds = [...(hasRecommended ? visibleTempAgents : []), ...visibleRegularAgents].map((a) => a.id)
     const tplIds = visibleTemplates.map((t) => `tpl-${t.id}`)
     const allIds = [...agentIds, ...tplIds].slice(0, MAX_REVIEW_AGENTS)
     setSelectedAgentIds(allIds)
@@ -705,6 +721,7 @@ export default function ReviewCreatePage() {
   const handleRecommendConfirm = () => {
     if (recommendAgents.length === 0) return
     setTempAgents(recommendAgents)
+    setHasRecommended(true)
     setRecommendModalOpen(false)
     toast('success', '已根据文档内容深度创建评委')
   }
@@ -716,6 +733,7 @@ export default function ReviewCreatePage() {
     : Boolean(selectedDocId && selectedAgentIds.length > 0 && hasValidConfig)
 
   const handleStart = async () => {
+    reviewStartedRef.current = true
     const activeDoc = reviewMode === 'compare' ? compareDoc : selectedDoc
     const activeDocId = reviewMode === 'compare' ? newDocId : selectedDocId
     if (!canStart || !activeDoc) return
@@ -1433,7 +1451,7 @@ export default function ReviewCreatePage() {
                 >
                   <WandSparkles className="h-3 w-3" /> 推荐创建
                 </button>
-                {(visibleAgents.length > 0 || visibleTemplates.length > 0) && (
+                {(hasVisibleContent) && (
                   <button
                     onClick={selectedAgentIds.length > 0 ? () => setSelectedAgentIds([]) : selectAllAgents}
                     className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
@@ -1452,7 +1470,7 @@ export default function ReviewCreatePage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {visibleAgents.length === 0 && visibleTemplates.length === 0 ? (
+            {!hasVisibleContent ? (
               <div className="rounded-[24px] border border-dashed border-primary-200 bg-primary-50/60 px-5 py-10 text-center">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-primary-600 shadow-sm">
                   <Sparkles className="h-6 w-6" />
@@ -1470,6 +1488,47 @@ export default function ReviewCreatePage() {
               </div>
             ) : (
               <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                {visibleTempAgents.length > 0 && hasRecommended && (
+                  <>
+                    <div className="flex items-center gap-2 py-1">
+                      <WandSparkles className="h-3 w-3 text-amber-500" />
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-amber-600">推荐角色</span>
+                    </div>
+                    {visibleTempAgents.map((agent) => {
+                      const isSelected = selectedAgentIds.includes(agent.id)
+                      const borderColor = AGENT_COLORS[agent.color]
+                      return (
+                        <button
+                          key={agent.id}
+                          onClick={() => toggleAgent(agent.id)}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-colors',
+                            isSelected ? 'border-amber-500 bg-amber-50' : 'border-amber-200 bg-amber-50/40 hover:bg-amber-50'
+                          )}
+                        >
+                          <div
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm"
+                            style={{
+                              backgroundColor: `${borderColor}18`,
+                              boxShadow: `0 0 0 1.5px ${borderColor}`,
+                            }}
+                          >
+                            {agent.avatar || agent.name[0]}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-gray-900">{agent.name}</p>
+                            <p className="mt-1 truncate text-xs text-gray-500">{agent.tagline}</p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-600">推荐</span>
+                          {isSelected ? <Check className="h-4 w-4 shrink-0 text-amber-600" /> : null}
+                        </button>
+                      )
+                    })}
+                    {(visibleTemplates.length > 0 || visibleRegularAgents.length > 0) && (
+                      <div className="h-px bg-gray-200" />
+                    )}
+                  </>
+                )}
                 {visibleTemplates.length > 0 && (
                   <>
                     <div className="flex items-center gap-2 py-1">
@@ -1507,16 +1566,16 @@ export default function ReviewCreatePage() {
                         </button>
                       )
                     })}
+                    {visibleRegularAgents.length > 0 && (
+                      <div className="flex items-center gap-2 py-1">
+                        <div className="h-px flex-1 bg-gray-200" />
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">我的角色</span>
+                        <div className="h-px flex-1 bg-gray-200" />
+                      </div>
+                    )}
                   </>
                 )}
-                {visibleTemplates.length > 0 && visibleAgents.length > 0 && (
-                  <div className="flex items-center gap-2 py-1">
-                    <div className="h-px flex-1 bg-gray-200" />
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">我的角色</span>
-                    <div className="h-px flex-1 bg-gray-200" />
-                  </div>
-                )}
-                {visibleAgents.map((agent) => {
+                {visibleRegularAgents.map((agent) => {
                   const isSelected = selectedAgentIds.includes(agent.id)
                   return (
                     <button

@@ -155,6 +155,23 @@ export default function ReviewDetailPage() {
     if (activeItems.length === 0) return undefined
     return activeItems.map((b) => `${BOOKMARK_CATEGORY_CONFIG[b.category].icon} ${b.category}：${b.fullContent}`).join('\n')
   }, [bookmarkList])
+  const agendaBookmarks = useMemo(() => {
+    if (!bookmarkList || bookmarkList.length === 0) return undefined
+    const activeItems = bookmarkList.filter((b) => !b.discussed)
+    if (activeItems.length === 0) return undefined
+    return activeItems.map((b) => ({
+      text: `${BOOKMARK_CATEGORY_CONFIG[b.category].icon} ${b.category}：${b.fullContent}`,
+      source_agent_id: b.source_agent_id,
+    }))
+  }, [bookmarkList])
+  const requiredAgentIds = useMemo(() => {
+    if (!bookmarkList) return []
+    const ids = new Set<string>()
+    bookmarkList
+      .filter((b) => !b.discussed && b.source_agent_id)
+      .forEach((b) => b.source_agent_id!.split(',').forEach((id) => id && ids.add(id)))
+    return Array.from(ids)
+  }, [bookmarkList])
   const agentReviews = useMemo(() => review?.agent_reviews || [], [review?.agent_reviews])
   const completedReviews = useMemo(
     () => agentReviews.filter((item) => item.status !== 'failed'),
@@ -560,14 +577,14 @@ export default function ReviewDetailPage() {
                     </div>
                   </div>
 
-                  <BookmarkableParagraph reviewId={review.id} section={`${item.agent_name}观点`} content={item.opinion} className="mb-4 whitespace-pre-wrap text-sm leading-7 text-gray-700" />
+                  <BookmarkableParagraph reviewId={review.id} section={`${item.agent_name}观点`} content={item.opinion} sourceAgentIds={item.agent_id} className="mb-4 whitespace-pre-wrap text-sm leading-7 text-gray-700" />
 
                   {item.highlights?.length ? (
                     <div className="mb-4 rounded-2xl border border-primary-100 bg-primary-50/70 p-4">
                       <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">角色提炼亮点</p>
                       <div className="space-y-1.5">
                         {item.highlights.slice(0, 3).map((highlight) => (
-                          <BookmarkableParagraph key={highlight} reviewId={review.id} section={`${item.agent_name}亮点`} content={highlight} className="text-sm text-gray-700" />
+                          <BookmarkableParagraph key={highlight} reviewId={review.id} section={`${item.agent_name}亮点`} content={highlight} sourceAgentIds={item.agent_id} className="text-sm text-gray-700" />
                         ))}
                       </div>
                     </div>
@@ -618,11 +635,11 @@ export default function ReviewDetailPage() {
                             style={{ width: `${dimension.score * 20}%`, backgroundColor: AGENT_COLORS[item.agent_color] }}
                           />
                         </div>
-                        {dimension.comment ? <BookmarkableParagraph reviewId={review.id} section={`${item.agent_name}维度评论`} content={dimension.comment} className="text-xs leading-6 text-gray-600" /> : null}
+                        {dimension.comment ? <BookmarkableParagraph reviewId={review.id} section={`${item.agent_name}维度评论`} content={dimension.comment} sourceAgentIds={item.agent_id} className="text-xs leading-6 text-gray-600" /> : null}
                         {dimension.evidence ? (
                           <div className="mt-3 rounded-xl border border-primary-100 bg-white px-3 py-2">
                             <p className="text-[11px] font-semibold text-primary-600">引用原文</p>
-                            <BookmarkableParagraph reviewId={review.id} section={`${item.agent_name}引用`} content={dimension.evidence} className="mt-1 text-xs leading-5 text-gray-700" />
+                            <BookmarkableParagraph reviewId={review.id} section={`${item.agent_name}引用`} content={dimension.evidence} sourceAgentIds={item.agent_id} className="mt-1 text-xs leading-5 text-gray-700" />
                           </div>
                         ) : null}
                       </div>
@@ -974,9 +991,12 @@ export default function ReviewDetailPage() {
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-primary-600">争议</p>
                 <div className="space-y-1.5">
                   {(controversies.length
-                    ? controversies.map((item) => `${item.topic}：${item.opinions.map((opinion) => `${opinion.agent_name}认为${opinion.stance}`).join('；')}`)
-                    : ['暂无明显争议']).map((item) => (
-                    <BookmarkableParagraph key={item} reviewId={review.id} section="争议" content={item} className="text-sm leading-6 text-gray-700" />
+                    ? controversies.map((item) => ({
+                        content: `${item.topic}：${item.opinions.map((opinion) => `${opinion.agent_name}认为${opinion.stance}`).join('；')}`,
+                        agentIds: item.opinions.map((op) => review.agents?.find((a) => a.name === op.agent_name)?.id).filter(Boolean).join(','),
+                      }))
+                    : [{ content: '暂无明显争议', agentIds: '' }]).map((item) => (
+                    <BookmarkableParagraph key={item.content} reviewId={review.id} section="争议" content={item.content} sourceAgentIds={item.agentIds || undefined} className="text-sm leading-6 text-gray-700" />
                   ))}
                 </div>
               </div>
@@ -1004,6 +1024,7 @@ export default function ReviewDetailPage() {
               <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                 {prioritySuggestions.map((suggestion) => {
                   const priority = PRIORITY_STYLES[suggestion.priority]
+                  const suggestionAgentId = review.agents?.find((a) => a.name === suggestion.source_agent)?.id
 
                   return (
                     <div key={suggestion.id} className="rounded-[24px] border border-gray-100 p-4 transition-colors hover:bg-gray-50">
@@ -1015,19 +1036,19 @@ export default function ReviewDetailPage() {
                         <Badge variant={priority.badge}>{priority.label}</Badge>
                       </div>
 
-                      <BookmarkableParagraph reviewId={review.id} section="优化建议" content={suggestion.content} className={cn('text-sm leading-7 text-gray-700', suggestion.adopted && 'line-through text-gray-400')} />
+                      <BookmarkableParagraph reviewId={review.id} section="优化建议" content={suggestion.content} sourceAgentIds={suggestionAgentId} className={cn('text-sm leading-7 text-gray-700', suggestion.adopted && 'line-through text-gray-400')} />
 
                       {suggestion.evidence ? (
                         <div className="mt-3 rounded-2xl bg-gray-50 p-3">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500">引用原文</p>
-                          <BookmarkableParagraph reviewId={review.id} section="建议引用" content={suggestion.evidence} className="mt-1 text-sm leading-7 text-gray-700" />
+                          <BookmarkableParagraph reviewId={review.id} section="建议引用" content={suggestion.evidence} sourceAgentIds={suggestionAgentId} className="mt-1 text-sm leading-7 text-gray-700" />
                         </div>
                       ) : null}
 
                       {suggestion.expected_effect ? (
                         <div className="mt-3 rounded-2xl bg-primary-50 p-3">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-primary-600">预期收益</p>
-                          <BookmarkableParagraph reviewId={review.id} section="建议收益" content={suggestion.expected_effect} className="mt-1 text-sm leading-7 text-gray-700" />
+                          <BookmarkableParagraph reviewId={review.id} section="建议收益" content={suggestion.expected_effect} sourceAgentIds={suggestionAgentId} className="mt-1 text-sm leading-7 text-gray-700" />
                         </div>
                       ) : null}
 
@@ -1072,6 +1093,8 @@ export default function ReviewDetailPage() {
           initialAgentIds={review.agents?.map((a) => a.id) || []}
           initialDiscussionMode="moderated"
           agendaText={agendaText}
+          agendaBookmarks={agendaBookmarks}
+          requiredAgentIds={requiredAgentIds}
           onClose={() => setShowCreateModal(false)}
         />
       )}

@@ -13,11 +13,12 @@ interface Props {
   section: string
   content: string
   className?: string
+  sourceAgentIds?: string
 }
 
 const CATEGORIES: BookmarkCategory[] = ['痛点', '亮点', '疑问', '建议', '其他']
 
-export default function BookmarkableParagraph({ reviewId, section, content, className }: Props) {
+export default function BookmarkableParagraph({ reviewId, section, content, className, sourceAgentIds }: Props) {
   const elementId = useMemo(() => contentHash(`${section}:${content}`), [section, content])
   const [showPopover, setShowPopover] = useState(false)
   const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({})
@@ -72,9 +73,10 @@ export default function BookmarkableParagraph({ reviewId, section, content, clas
       fullContent: content,
       category,
       section,
+      source_agent_id: sourceAgentIds,
     })
     setShowPopover(false)
-  }, [addBookmark, reviewId, content, section])
+  }, [addBookmark, reviewId, content, section, sourceAgentIds])
 
   const categoryConfig = existingBookmark ? BOOKMARK_CATEGORY_CONFIG[existingBookmark.category] : null
 

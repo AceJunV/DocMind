@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, Check, FileText, Search, ArrowLeft } from 'lucide-react'
+import { X, Check, FileText, Search, ArrowLeft, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AGENT_COLORS } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
@@ -50,6 +50,8 @@ interface Props {
   initialAgentIds?: string[]
   initialDiscussionMode?: DiscussionMode
   agendaText?: string
+  agendaBookmarks?: Array<{ text: string; source_agent_id?: string }>
+  requiredAgentIds?: string[]
   onClose: () => void
 }
 
@@ -59,6 +61,8 @@ export default function ChatRoomConfigModal({
   initialAgentIds = [],
   initialDiscussionMode = 'free',
   agendaText,
+  agendaBookmarks,
+  requiredAgentIds = [],
   onClose,
 }: Props) {
   const navigate = useNavigate()
@@ -68,6 +72,7 @@ export default function ChatRoomConfigModal({
   const markAsDiscussed = useReviewBookmarkStore((s) => s.markAsDiscussed)
   const agents = useAgentStore((s) => s.agents)
   const tempAgents = useAgentStore((s) => s.tempAgents)
+  const trashedAgents = useAgentStore((s) => s.trashedAgents)
   const templates = useAgentStore((s) => s.templates)
   const templateVisibility = useAgentStore((s) => s.templateVisibility)
 
@@ -77,6 +82,23 @@ export default function ChatRoomConfigModal({
     [templates, templateVisibility]
   )
 
+  const requiredAgentSet = useMemo(() => new Set(requiredAgentIds), [requiredAgentIds])
+  const requiredAgents = useMemo(
+    () => requiredAgentIds.map((id) => visibleAgents.find((a) => a.id === id)).filter(Boolean) as typeof visibleAgents,
+    [requiredAgentIds, visibleAgents],
+  )
+  const deletedRequiredAgentNames = useMemo(
+    () => requiredAgentIds
+      .filter((id) => !visibleAgents.find((a) => a.id === id))
+      .map((id) => trashedAgents.find((a) => a.id === id)?.name)
+      .filter(Boolean) as string[],
+    [requiredAgentIds, visibleAgents, trashedAgents],
+  )
+  const regularVisibleAgents = useMemo(
+    () => visibleAgents.filter((a) => !requiredAgentSet.has(a.id)),
+    [visibleAgents, requiredAgentSet],
+  )
+
   const reviews = useReviewStore((s) => s.reviews)
   const completedReviews = useMemo(
     () => reviews.filter((r) => r.status === 'completed'),
@@ -84,7 +106,13 @@ export default function ChatRoomConfigModal({
   )
 
   const [newTopic, setNewTopic] = useState(initialTopic)
-  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>(initialAgentIds)
+  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>(() => {
+    const initial = [...initialAgentIds]
+    requiredAgentIds.forEach((id) => {
+      if (!initial.includes(id)) initial.push(id)
+    })
+    return initial
+  })
   const [discussionMode, setDiscussionMode] = useState<DiscussionMode>(initialDiscussionMode)
   const [contextDepth, setContextDepth] = useState<ContextDepth>(DEFAULT_CHAT_ROOM_STRATEGY.contextDepth)
   const [initiativeLevel, setInitiativeLevel] = useState<InitiativeLevel>(DEFAULT_CHAT_ROOM_STRATEGY.initiativeLevel)
@@ -104,6 +132,10 @@ export default function ChatRoomConfigModal({
   }, [completedReviews, docSearch])
 
   const toggleAgentSelect = (id: string) => {
+    if (requiredAgentSet.has(id)) {
+      toast('info', '本次议题有该角色提出内容，需要该角色参与。')
+      return
+    }
     setSelectedAgentIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     )
@@ -187,13 +219,14 @@ export default function ChatRoomConfigModal({
           ].slice(0, 5)
         : undefined,
       bookmarkAgenda: agendaText || undefined,
-      pendingTopics: agendaText
-        ? agendaText.split('\n').filter(Boolean).map((line) => ({
+      pendingTopics: agendaBookmarks
+        ? agendaBookmarks.map((item) => ({
             id: `agenda-${createId()}`,
-            text: line.replace(/^[^\s]+\s/, '').replace(/^[^：]+：/, ''),
+            text: item.text,
             source: 'user' as const,
             priority: 5,
             status: 'pending' as ChatAgendaItem['status'],
+            source_agent_id: item.source_agent_id,
           }))
         : undefined,
       created_at: new Date().toISOString(),
@@ -410,10 +443,51 @@ export default function ChatRoomConfigModal({
               选择参与的角色 ({selectedAgentIds.length}/{visibleTemplates.length + visibleAgents.length})
             </label>
             <div className="max-h-44 overflow-y-auto rounded-lg border border-gray-200 p-2">
-              {visibleTemplates.length === 0 && visibleAgents.length === 0 ? (
+              {visibleTemplates.length === 0 && visibleAgents.length === 0 && requiredAgents.length === 0 ? (
                 <p className="py-4 text-center text-sm text-gray-400">请先在角色工坊中添加角色</p>
               ) : (
                 <div className="grid grid-cols-2 gap-1.5">
+                  {requiredAgents.length > 0 && (
+                    <>
+                      <div className="col-span-2 flex items-center gap-2 py-1">
+                        <Lock className="h-3 w-3 text-amber-500" />
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-amber-600">
+                          必须参与
+                        </span>
+                      </div>
+                      {requiredAgents.map((agent) => {
+                        const color = AGENT_COLORS[agent.color]
+                        return (
+                          <button
+                            key={agent.id}
+                            onClick={() => toggleAgentSelect(agent.id)}
+                            className="flex w-full items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-left transition-colors cursor-pointer"
+                          >
+                            <div
+                              className="flex h-8 w-8 items-center justify-center rounded-full text-sm shrink-0"
+                              style={{
+                                backgroundColor: color + '15',
+                                boxShadow: `0 0 0 2px ${color}`,
+                              }}
+                            >
+                              {agent.avatar || agent.name[0]}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900">{agent.name}</p>
+                              <p className="text-xs text-gray-500 truncate">{agent.tagline}</p>
+                            </div>
+                            <Lock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                          </button>
+                        )
+                      })}
+                      {deletedRequiredAgentNames.length > 0 && (
+                        <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                          以下内容来源角色已被删除，可从回收站恢复：{deletedRequiredAgentNames.join('、')}
+                        </div>
+                      )}
+                      <div className="col-span-2 h-px bg-gray-200" />
+                    </>
+                  )}
                   {visibleTemplates.length > 0 && (
                     <>
                       <div className="col-span-2 flex items-center gap-2 py-1">
@@ -453,7 +527,7 @@ export default function ChatRoomConfigModal({
                       })}
                     </>
                   )}
-                  {visibleTemplates.length > 0 && visibleAgents.length > 0 && (
+                  {visibleTemplates.length > 0 && regularVisibleAgents.length > 0 && (
                     <div className="col-span-2 flex items-center gap-2 py-1">
                       <div className="h-px flex-1 bg-gray-200" />
                       <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
@@ -462,7 +536,7 @@ export default function ChatRoomConfigModal({
                       <div className="h-px flex-1 bg-gray-200" />
                     </div>
                   )}
-                  {visibleAgents.map((agent) => {
+                  {regularVisibleAgents.map((agent) => {
                     const isSelected = selectedAgentIds.includes(agent.id)
                     return (
                       <button

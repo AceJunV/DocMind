@@ -239,6 +239,7 @@ export interface ChatAgendaItem {
   source: 'document' | 'review' | 'user'
   priority: number
   status: 'pending' | 'active' | 'done'
+  source_agent_id?: string
 }
 
 export interface ChatRoom {
@@ -426,4 +427,5 @@ export interface ReviewBookmark {
   section: string
   discussed?: boolean
   createdAt: string
+  source_agent_id?: string  // 内容来源角色ID，争议场景逗号分隔多个ID
 }

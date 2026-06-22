@@ -185,10 +185,10 @@ function buildChatSystemPrompt(
 - 不要重复别人的句式和结论。`
 
   const responseGuide = mode === 'free'
-    ? `3. 用户主动问到文档、评审、课堂或建议时，再结合材料展开；否则不要强行把话题拉回材料。
-4. 回应要以角色身份自然说话，短、具体、有人味，不要自顾自开会。`
-    : `3. 不要泛泛而谈，要尽量落到教学设计、课堂执行、学生理解、评价反馈这些具体点上。
-4. 如果群里已经有文档或评审结论，就基于内容说话，不要再问“有没有文档”。`
+    ? `4. 用户主动问到文档、评审、课堂或建议时，再结合材料展开；否则不要强行把话题拉回材料。
+5. 回应要以角色身份自然说话，短、具体、有人味，不要自顾自开会。`
+    : `4. 不要泛泛而谈，要尽量落到教学设计、课堂执行、学生理解、评价反馈这些具体点上。
+5. 如果群里已经有文档或评审结论，就基于内容说话，不要再问“有没有文档”。`
 
   const toneGuide = getRoomToneGuide(strategy?.roomTone)
   const citationGuide = getCitationGuide(strategy?.citationPolicy)
@@ -197,7 +197,7 @@ function buildChatSystemPrompt(
     : ''
 
   const mentionGuide = userName
-    ? `\n当直接回应用户 ${userName} 时，请在开头使用 @${userName}。`
+    ? `\n发言时可以直接回应用户 ${userName} 说的话。`
     : ''
 
   return `${agent.system_prompt}
@@ -212,6 +212,7 @@ ${docContext}
 记住：
 1. 你正在一个教研讨论群里发言，语气要像真实群聊，不要像写长报告。
 2. 回答控制在 2-4 句，优先回应别人已经说过的话。
+3. 回复内容不要添加 [角色名] 前缀，你的身份会自动在界面上显示。如果需要点名回应某位角色，可以使用 @角色名。
 ${responseGuide}`
 }
 
@@ -322,7 +323,7 @@ function buildRecentContextMessages(messages: ChatMessage[], documentMap: Map<st
     role: (message.sender_type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
     content:
       message.sender_type === 'agent' && message.sender_id !== 'system'
-        ? `[${message.sender_name}]: ${buildMessageContent(message, documentMap)}`
+        ? `${message.sender_name}说：${buildMessageContent(message, documentMap)}`
         : buildMessageContent(message, documentMap),
   }))
 }
@@ -547,10 +548,23 @@ function buildDiscussionTurns(
   strategy?: ChatRoomStrategy,
   targetAgent?: Agent,
   capabilityProfiles?: Record<string, CapabilityProfile>,
+  requiredSpeakers?: Agent[],
 ) {
   const latestUserMessage = getLatestUserMessage(recentMessages)
   const userIntent = inferUserIntent(latestUserMessage)
   const topicText = buildRoundFocus(recentMessages, topic, mode)
+
+  if (requiredSpeakers && requiredSpeakers.length > 1) {
+    return requiredSpeakers.map((agent, index) => {
+      const turn: DiscussionTurn = {
+        agent,
+        intent: (index === 0 ? 'open' : 'support') as DiscussionTurnIntent,
+        focus: topicText,
+        isUserDirected: true,
+      }
+      return turn
+    })
+  }
 
   if (targetAgent) {
     return [{ agent: targetAgent, intent: userIntent || 'open', focus: topicText, isUserDirected: true }] satisfies DiscussionTurn[]
@@ -984,6 +998,7 @@ export default function ChatRoomPage() {
               {
                 role: 'system',
                 content: [
+                  agent.system_prompt,
                   validation.rewriteInstruction,
                   '只输出重写后的研讨室发言，不要解释规则，不要保留越权判断。',
                 ].join('\n'),
@@ -1007,15 +1022,41 @@ export default function ChatRoomPage() {
             finalPosture = rewriteValidation.recommendedPosture
             outputWasRewritten = true
           } else {
-            text = createIdentitySafeFallbackReply({
-              agent,
-              profile,
-              focus: currentTopic?.text || room?.topic,
-              requestedPosture,
-              violations: rewriteValidation.violations,
-            })
-            outputWasRewritten = true
-            finalPosture = validation.recommendedPosture
+            const violationSummary = rewriteValidation.violations.map((v) => `- ${v.message}`).join('\n')
+            const secondRewrite = await requestChatCompletion(
+              [
+                {
+                  role: 'system',
+                  content: [
+                    agent.system_prompt,
+                    `你是角色「${agent.name}」，请用这个角色的口吻重新发言。`,
+                    `当前议题：${currentTopic?.text || room?.topic || '自由讨论'}`,
+                    `刚才的回复存在以下问题：\n${violationSummary}`,
+                    `禁止使用这些术语做判断：${profile.forbiddenClaims.join('、')}`,
+                    `你的身份类型是「${profile.identityType}」，只从这个身份能说出口的角度发言。`,
+                    '直接输出2-4句发言，不要解释你为什么改写，不要提"系统规则"。',
+                  ].join('\n'),
+                },
+                { role: 'user', content: `原回复：\n${text}` },
+              ],
+              signal,
+            )
+
+            if (secondRewrite.text) {
+              text = secondRewrite.text
+              outputWasRewritten = true
+              finalPosture = validation.recommendedPosture
+            } else {
+              text = createIdentitySafeFallbackReply({
+                agent,
+                profile,
+                focus: currentTopic?.text || room?.topic,
+                requestedPosture,
+                violations: rewriteValidation.violations,
+              })
+              outputWasRewritten = true
+              finalPosture = validation.recommendedPosture
+            }
           }
         }
       }
@@ -1075,7 +1116,7 @@ export default function ChatRoomPage() {
     [addMessage, currentTopic, id, user]
   )
 
-  const runDiscussionRound = useCallback(async (recentMessages: ChatMessage[], targetAgent?: Agent, topic?: ChatAgendaItem | null) => {
+  const runDiscussionRound = useCallback(async (recentMessages: ChatMessage[], targetAgent?: Agent, topic?: ChatAgendaItem | null, requiredSpeakers?: Agent[]) => {
       if (!participants.length) return
 
       if (id) {
@@ -1085,7 +1126,7 @@ export default function ChatRoomPage() {
         }
       }
 
-      const turns = buildDiscussionTurns(participants, recentMessages, discussionMode, topic, roomStrategy, targetAgent, capabilityProfiles)
+      const turns = buildDiscussionTurns(participants, recentMessages, discussionMode, topic, roomStrategy, targetAgent, capabilityProfiles, requiredSpeakers)
       const conversation = [...recentMessages]
       let responsesAdded = 0
       let skippedForRepetition = 0
@@ -1325,6 +1366,14 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
         created_at: new Date().toISOString(),
       })
     }
+
+    const topicAgentIds = topic.source_agent_id?.split(',').filter(Boolean) || []
+    const topicAgents = topicAgentIds
+      .map((aid) => participants.find((p) => p.id === aid))
+      .filter(Boolean) as Agent[]
+    const topicTargetAgent = topicAgents.length === 1 ? topicAgents[0] : undefined
+    const topicRequiredSpeakers = topicAgents.length > 1 ? topicAgents : undefined
+
     void runDiscussionRound(
       [
         createVirtualUserMessage(
@@ -1333,8 +1382,9 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
             : `请围绕"${seedText}"直接开始讨论，像真实教研群一样先抛出一个具体判断。`
         ),
       ],
-      undefined,
+      topicTargetAgent,
       topic,
+      topicRequiredSpeakers,
     )
   }, [activateAgendaTopic, addMessage, agenda, doc, id, resetCurrentTopic, room?.topic, runDiscussionRound, user?.id, user?.name])
 
@@ -1924,7 +1974,9 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
                 </button>
               </div>
               <div className="max-h-[260px] space-y-2 overflow-y-auto">
-                {participants.map((participant) => (
+                {participants.map((participant) => {
+                  const isTyping = typingAgentIds.includes(participant.id)
+                  return (
                   <button
                     key={participant.id}
                     onClick={() => {
@@ -1937,8 +1989,12 @@ const handleTopicClick = useCallback((topic: ChatAgendaItem) => {
                       {participant.avatar || participant.name[0]}
                     </div>
                     <span className="text-sm text-gray-700">{participant.name}</span>
+                    {isTyping && (
+                      <MessageCircle className="ml-auto h-3.5 w-3.5 animate-bounce text-primary-500" />
+                    )}
                   </button>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </aside>
